@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
-import { WalrusFile } from '@mysten/walrus';
-import type { Signer } from '@mysten/sui/cryptography';
 
 import { client } from './client';
 
@@ -18,7 +15,7 @@ async function getKeypair(): Promise<Ed25519Keypair> {
 	}
 };
 
-export async function uploadFile(text: string) {
+export async function uploadFile(text: string): Promise<WalrusUploadResult> {
 	const keypair = await getKeypair()
 
 	const file = new TextEncoder().encode(text);
@@ -31,6 +28,11 @@ export async function uploadFile(text: string) {
 	});
 
 	console.log(blobId, blobObject);
+
+	return {
+		id: blobObject.id.id, // Quilt ID from the blob object
+		blobId: blobId, // Blob ID
+	};
 }
 
 // Export interface for upload results

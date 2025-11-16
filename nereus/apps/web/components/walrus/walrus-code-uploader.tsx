@@ -29,7 +29,7 @@ interface WalrusCodeUploaderProps {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	signer: any; // Signer type from Sui - accepting any to work with WalletAccount
 	defaultFilename?: string;
-	onUploaded?: (result: WalrusUploadResult) => void;
+	onUploaded?: (result: WalrusUploadResult, userCode: string) => void;
 }
 
 export function WalrusCodeUploader(props: WalrusCodeUploaderProps) {
@@ -81,16 +81,10 @@ export function WalrusCodeUploader(props: WalrusCodeUploaderProps) {
 
 			const formattedCode = JSON.stringify(codeData, null, 2);
 
-			const res = await uploadFile({
-				code: formattedCode,
-				filename: filename || 'snippet.ts',
-				epochs: 3,
-				deletable: true,
-				signer,
-			});
+			const res = await uploadFile(formattedCode);
 
 			setResult(res);
-			onUploaded?.(res);
+			onUploaded?.(res, code);
 		} catch (err: unknown) {
 			console.error(err);
 			setError(err instanceof Error ? err.message : 'Failed to upload code to Walrus.');

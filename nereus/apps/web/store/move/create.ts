@@ -2,12 +2,12 @@ import { Transaction } from "@mysten/sui/transactions";
 import {market} from "./package";
 
 export function createMarketTx(
+    tx: Transaction,
     topic: string,
     description: string,
     start_time: number,
     end_time: number
 ): Transaction {
-    const tx = new Transaction();
     tx.moveCall({
         target: market+"::create_market",
         arguments: [

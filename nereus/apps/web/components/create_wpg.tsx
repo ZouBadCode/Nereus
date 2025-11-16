@@ -11,6 +11,8 @@ import { WalrusPromptUploader } from "./walrus/walrus-prompt-uploader";
 import type { WalrusUploadResult } from "@/store/move/walrus/walrusRelay";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { createMarketTx } from "@/store/move/create";
+import { createMarketTx as createConfigTx } from "@/store/move/create_config";
+import { Transaction } from "@mysten/sui/transactions";
 
 type Step = 0 | 1 | 2 | 3 | 4;
 
@@ -40,6 +42,9 @@ interface FormState {
 	resolutionType: "ai" | "code" | "";
 	aiPrompt: string;
 	aiPromptUploadResult: WalrusUploadResult | null;
+	// Store the actual user-entered content as strings for retrieval
+	userEnteredPrompt: string; // The actual prompt text the user entered
+	userEnteredCode: string; // The actual code text the user entered
 	codeUploadResult: WalrusUploadResult | null;
 }
 
@@ -94,6 +99,8 @@ const initialState: FormState = {
 	resolutionType: "",
 	aiPrompt: "",
 	aiPromptUploadResult: null,
+	userEnteredPrompt: "",
+	userEnteredCode: "",
 	codeUploadResult: null,
 };
 
@@ -157,12 +164,12 @@ export function CreateWizard() {
 		
 	};
 
-	const handleWalrusUpload = (result: WalrusUploadResult) => {
-		setForm({ ...form, codeUploadResult: result });
+	const handleWalrusUpload = (result: WalrusUploadResult, userCode: string) => {
+		setForm({ ...form, codeUploadResult: result, userEnteredCode: userCode });
 	};
 
-	const handleAIPromptUpload = (result: WalrusUploadResult) => {
-		setForm({ ...form, aiPromptUploadResult: result });
+	const handleAIPromptUpload = (result: WalrusUploadResult, userPrompt: string) => {
+		setForm({ ...form, aiPromptUploadResult: result, userEnteredPrompt: userPrompt });
 	};
 
 	const canProceed = (() => {
@@ -182,12 +189,30 @@ export function CreateWizard() {
 			const startTimeTimestamp = Math.floor(Date.now() / 1000); // Current time in seconds
 
 			// Create the market transaction
-			const tx = createMarketTx(
+			const tx = new Transaction();
+			createMarketTx(
+				tx,
 				form.name,
 				form.marketRules || form.rules,
 				startTimeTimestamp,
 				endTimeTimestamp
 			);
+			
+			// Add resolution configuration if we have uploaded content
+			if (form.resolutionType === "ai" && form.aiPromptUploadResult) {
+				createConfigTx(
+					tx,
+					"ai_resolution", // code_hash for AI resolution
+					form.aiPromptUploadResult.blobId
+				);
+			} else if (form.resolutionType === "code" && form.codeUploadResult) {
+				createConfigTx(
+					tx,
+					"code_resolution", // code_hash for code resolution
+					form.codeUploadResult.blobId
+				);
+			}
+			
 			signAndExecuteTransaction({ transaction: tx });
 			
 		} catch (error) {
@@ -406,8 +431,8 @@ function ResolutionTypePage({
 }: { 
 	form: FormState;
 	onSelectType: (type: "ai" | "code" | "") => void;
-	onWalrusUpload: (result: WalrusUploadResult) => void;
-	onAIPromptUpload: (result: WalrusUploadResult) => void;
+	onWalrusUpload: (result: WalrusUploadResult, userCode: string) => void;
+	onAIPromptUpload: (result: WalrusUploadResult, userPrompt: string) => void;
 }) {
     const curacc = useCurrentAccount();
 	if (form.resolutionType === "") {
@@ -556,14 +581,30 @@ function ReviewPage({ form }: { form: FormState }) {
 					<span className="font-semibold">Resolution Type:</span> {form.resolutionType === "ai" ? "AI Resolution" : form.resolutionType === "code" ? "Code Resolution" : "—"}
 				</div>
 				{form.resolutionType === "ai" && form.aiPromptUploadResult && (
-					<div>
-						<span className="font-semibold">AI Prompt Blob ID:</span> {form.aiPromptUploadResult.blobId}
-					</div>
+					<>
+						<div>
+							<span className="font-semibold">AI Prompt Blob ID:</span> {form.aiPromptUploadResult.blobId}
+						</div>
+						<div>
+							<span className="font-semibold">AI Prompt Content:</span>
+							<div className="mt-1 p-2 bg-muted rounded text-xs max-h-20 overflow-y-auto whitespace-pre-wrap">
+								{form.userEnteredPrompt || form.aiPrompt}
+							</div>
+						</div>
+					</>
 				)}
 				{form.resolutionType === "code" && form.codeUploadResult && (
-					<div>
-						<span className="font-semibold">Code Blob ID:</span> {form.codeUploadResult.blobId}
-					</div>
+					<>
+						<div>
+							<span className="font-semibold">Code Blob ID:</span> {form.codeUploadResult.blobId}
+						</div>
+						<div>
+							<span className="font-semibold">Code Content:</span>
+							<div className="mt-1 p-2 bg-muted rounded text-xs max-h-20 overflow-y-auto whitespace-pre-wrap font-mono">
+								{form.userEnteredCode}
+							</div>
+						</div>
+					</>
 				)}
 			</div>
 		</div>

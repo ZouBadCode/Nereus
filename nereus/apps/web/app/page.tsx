@@ -1,7 +1,9 @@
 import { Navbar } from "@/components/navbar"
 import { MarketGrid } from "@/components/market-grid"
-
+import { storeStore } from "@/store/storeStore";
+const { queryMarkets } = storeStore.getState();
 export default function Page() {
+  queryMarkets();
   return (
     <main className="min-h-svh">
       <Navbar />

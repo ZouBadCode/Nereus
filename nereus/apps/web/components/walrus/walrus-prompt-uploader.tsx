@@ -24,7 +24,7 @@ interface WalrusPromptUploaderProps {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	signer: any; // Signer type from Sui - accepting any to work with WalletAccount
 	defaultPrompt?: string;
-	onUploaded?: (result: WalrusUploadResult) => void;
+	onUploaded?: (result: WalrusUploadResult, userPrompt: string) => void;
 	initialTitle?: string;
 }
 
@@ -65,16 +65,10 @@ export function WalrusPromptUploader(props: WalrusPromptUploaderProps) {
 
 			const formattedPrompt = JSON.stringify(promptData, null, 2);
 
-			const res = await uploadFile({
-				code: formattedPrompt,
-				filename: 'ai-resolution-prompt.json',
-				epochs: 5,
-				deletable: false,
-				signer,
-			});
+			const res = await uploadFile(formattedPrompt);
 
 			setResult(res);
-			onUploaded?.(res);
+			onUploaded?.(res, prompt);
 		} catch (err: unknown) {
 			console.error(err);
 			setError(err instanceof Error ? err.message : 'Failed to upload prompt to Walrus.');

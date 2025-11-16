@@ -5,6 +5,8 @@ import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ApolloProvider as ApolloClientProvider } from '@apollo/client/react';
+import { gqlClient } from '@/utils/gql';
 
 // Config options for the networks you want to connect to
 const { networkConfig } = createNetworkConfig({
@@ -19,16 +21,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
-        <WalletProvider>
-          <NextThemesProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-            enableColorScheme
-          >
-            {children}
-          </NextThemesProvider>
+        <WalletProvider autoConnect>
+          <ApolloClientProvider client={gqlClient}>
+            <NextThemesProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+              enableColorScheme
+            >
+              {children}
+            </NextThemesProvider>
+          </ApolloClientProvider>
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
