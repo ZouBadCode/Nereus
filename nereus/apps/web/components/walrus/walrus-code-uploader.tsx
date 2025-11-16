@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import type { Signer } from '@mysten/sui/cryptography';
-import { uploadCodeToWalrus, WalrusUploadResult } from '@/lib/walrus/uploadToWalrus';
+import { uploadCodeToWalrus, WalrusUploadResult } from '@/store/move/walrus/walrusRelay';
 
 import {
 	Card,
@@ -81,9 +81,9 @@ export function WalrusCodeUploader(props: WalrusCodeUploaderProps) {
 
 			setResult(res);
 			onUploaded?.(res);
-		} catch (err: any) {
+		} catch (err: unknown) {
 			console.error(err);
-			setError(err?.message ?? 'Failed to upload code to Walrus.');
+			setError(err instanceof Error ? err.message : 'Failed to upload code to Walrus.');
 		} finally {
 			setUploading(false);
 		}

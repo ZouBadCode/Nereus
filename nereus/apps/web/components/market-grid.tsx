@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { CategoryTabs } from "./category-tabs"
 import { Market, MarketCardLarge, MarketCardMedium, MarketCardSmall } from "./market/market-card"
 
@@ -55,28 +56,36 @@ const MOCK: Market[] = [
 ]
 
 export function MarketGrid() {
+  const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const handleMarketClick = (market: Market, _side?: "yes" | "no") => {
+    setSelectedMarket(market)
+    setIsModalOpen(true)
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl px-4">
       <CategoryTabs>
-        {(active) => (
+        {() => (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
             <div className="md:col-span-6">
-              <MarketCardLarge m={MOCK[0]} />
+              <MarketCardLarge m={MOCK[0]!} onMarketClick={handleMarketClick} />
             </div>
             <div className="md:col-span-3">
-              <MarketCardMedium m={MOCK[1]} />
+              <MarketCardMedium m={MOCK[1]!} onMarketClick={handleMarketClick} />
             </div>
             <div className="md:col-span-3">
-              <MarketCardMedium m={MOCK[2]} />
+              <MarketCardMedium m={MOCK[2]!} onMarketClick={handleMarketClick} />
             </div>
             <div className="md:col-span-3">
-              <MarketCardSmall m={MOCK[3]} />
+              <MarketCardSmall m={MOCK[3]!} onMarketClick={handleMarketClick} />
             </div>
             <div className="md:col-span-3">
-              <MarketCardSmall m={MOCK[4]} />
+              <MarketCardSmall m={MOCK[4]!} onMarketClick={handleMarketClick} />
             </div>
             <div className="md:col-span-3">
-              <MarketCardSmall m={MOCK[5]} />
+              <MarketCardSmall m={MOCK[5]!} onMarketClick={handleMarketClick} />
             </div>
             <div className="md:col-span-12">
               {/* Footer bar placeholder matching figma */}
@@ -85,6 +94,8 @@ export function MarketGrid() {
           </div>
         )}
       </CategoryTabs>
+      
+
     </section>
   )
 }

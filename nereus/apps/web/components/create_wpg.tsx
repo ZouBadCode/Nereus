@@ -10,6 +10,7 @@ import { WalrusCodeUploader } from "./walrus/walrus-code-uploader";
 import type { WalrusUploadResult } from "@/lib/walrus/uploadToWalrus";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { createMarketTx } from "@/store/move/create";
+import { uploadFile } from "@/store/move/walrus/walrusRelay";
 
 type Step = 0 | 1 | 2 | 3 | 4;
 
@@ -181,7 +182,6 @@ export function CreateWizard() {
 				startTimeTimestamp,
 				endTimeTimestamp
 			);
-			
 			signAndExecuteTransaction({ transaction: tx });
 			
 		} catch (error) {

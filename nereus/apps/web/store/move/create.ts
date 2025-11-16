@@ -9,7 +9,7 @@ export function createMarketTx(
 ): Transaction {
     const tx = new Transaction();
     tx.moveCall({
-        target: market,
+        target: market+"::create_market",
         arguments: [
             tx.pure.string(topic),
             tx.pure.string(description),
