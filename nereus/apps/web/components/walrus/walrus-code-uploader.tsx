@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { uploadCodeToWalrus, WalrusUploadResult } from '@/store/move/walrus/walrusRelay';
+import { uploadFile, WalrusUploadResult } from '@/store/move/walrus/walrusRelay';
 
 import {
 	Card,
@@ -71,9 +71,19 @@ export function WalrusCodeUploader(props: WalrusCodeUploaderProps) {
 		setError(null);
 
 		try {
-			const res = await uploadCodeToWalrus({
-				code,
-				filename,
+			// Create a structured code file with metadata
+			const codeData = {
+				filename: filename || 'snippet.ts',
+				code: code,
+				timestamp: new Date().toISOString(),
+				type: 'code-snippet'
+			};
+
+			const formattedCode = JSON.stringify(codeData, null, 2);
+
+			const res = await uploadFile({
+				code: formattedCode,
+				filename: filename || 'snippet.ts',
 				epochs: 3,
 				deletable: true,
 				signer,

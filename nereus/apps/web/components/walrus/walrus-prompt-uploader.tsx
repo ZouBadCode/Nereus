@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { uploadCodeToWalrus, WalrusUploadResult } from '@/store/move/walrus/walrusRelay';
+import { uploadFile, WalrusUploadResult } from '@/store/move/walrus/walrusRelay';
 
 import {
 	Card,
@@ -65,7 +65,7 @@ export function WalrusPromptUploader(props: WalrusPromptUploaderProps) {
 
 			const formattedPrompt = JSON.stringify(promptData, null, 2);
 
-			const res = await uploadCodeToWalrus({
+			const res = await uploadFile({
 				code: formattedPrompt,
 				filename: 'ai-resolution-prompt.json',
 				epochs: 5,

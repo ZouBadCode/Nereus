@@ -18,14 +18,8 @@ async function getKeypair(): Promise<Ed25519Keypair> {
 	}
 };
 
-
-// Legacy upload function for backward compatibility
 export async function uploadFile(text: string) {
-	const keypair = await getKeypair();
-	await requestSuiFromFaucetV2({
-		host: getFaucetHost('testnet'),
-		recipient: keypair.getPublicKey().toSuiAddress(),
-	});
+	const keypair = await getKeypair()
 
 	const file = new TextEncoder().encode(text);
 
@@ -44,54 +38,3 @@ export interface WalrusUploadResult {
 	id: string; // Quilt ID
 	blobId: string; // Blob ID
 }
-
-// Parameters for uploading code to Walrus
-export interface UploadCodeParams {
-	code: string;
-	filename: string;
-	epochs: number;
-	deletable: boolean;
-	signer: Signer;
-}
-
-// Enhanced upload function using Walrus upload relay and WalrusFile
-export async function uploadCodeToWalrus(params: UploadCodeParams): Promise<WalrusUploadResult> {
-		const keypair = await getKeypair();
-	await requestSuiFromFaucetV2({
-		host: getFaucetHost('testnet'),
-		recipient: keypair.getPublicKey().toSuiAddress(),
-	});
-
-	const { code, filename, epochs, deletable, signer } = params;
-
-	try {
-		// Create WalrusFile instance with the code content
-		const file = WalrusFile.from({
-			contents: new TextEncoder().encode(code),
-			identifier: filename,
-		});
-
-		// Upload via the relay using writeFiles (recommended for dapps)
-		const results = await client.walrus.writeFiles({
-			files: [file],
-			epochs,
-			deletable,
-			signer,
-		});
-
-		// Extract the first result (we only upload one file)
-		const result = results[0];
-		if (!result) {
-			throw new Error('No upload result returned from Walrus');
-		}
-
-		return {
-			id: result.id, // Quilt ID
-			blobId: result.blobId, // Blob ID
-		};
-	} catch (error) {
-		console.error('Failed to upload code to Walrus:', error);
-		throw new Error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-	}
-}
-
