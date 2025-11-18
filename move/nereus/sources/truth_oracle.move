@@ -56,7 +56,7 @@ public fun create_config(
     code_hash: String,
     blob_id: String,
     ctx: &mut TxContext,
-) {
+): OracleConfig {
     let config = OracleConfig {
         id: object::new(ctx),
         blob_id,
@@ -68,7 +68,7 @@ public fun create_config(
 public fun create_truth_oracle_holder(
     config: &OracleConfig,
     ctx: &mut TxContext
-) {
+): TruthOracleHolder {
     let holder = TruthOracleHolder {
         id: object::new(ctx),
         result: false,
