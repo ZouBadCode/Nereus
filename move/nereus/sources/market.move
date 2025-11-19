@@ -288,7 +288,7 @@ module nereus::market {
         };
     }
 
-    /// === Settlement ===
+/// === Settlement ===
 
     public fun redeem_yes(
         yes_bet: &Yes,
