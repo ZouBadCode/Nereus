@@ -288,7 +288,7 @@ module nereus::market {
         };
     }
 
-    /// === Settlement ===
+/// === Settlement ===
 
     public fun redeem_yes(
         yes_bet: &Yes,
@@ -298,7 +298,10 @@ module nereus::market {
         ctx: &mut TxContext
     ) {
         assert!(object::id(market) == yes_bet.market_id, EWrongMarket);
-        assert!(object::id(market) == object::id(truth), EWrongMarket);
+        
+        // 修正點：檢查 Market 記錄的 oracle_id 是否等於傳入的 truth 物件 ID
+        assert!(market.oracle_config_id == object::id(truth), EWrongMarket);
+        
         assert!(clock::timestamp_ms(clock) >= market.end_time, EWrongTime);
         assert!(truth_oracle::get_outcome(truth) == true, EWrongTruth);
 
@@ -315,7 +318,10 @@ module nereus::market {
         ctx: &mut TxContext
     ) {
         assert!(object::id(market) == no_bet.market_id, EWrongMarket);
-        assert!(object::id(market) == object::id(truth), EWrongMarket);
+        
+        // 修正點：這裡也要改
+        assert!(market.oracle_config_id == object::id(truth), EWrongMarket);
+        
         assert!(clock::timestamp_ms(clock) >= market.end_time, EWrongTime);
         assert!(truth_oracle::get_outcome(truth) == false, EWrongTruth);
 
