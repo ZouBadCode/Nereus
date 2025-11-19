@@ -24,6 +24,12 @@ FROM stagex/linux-nitro@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eae
 FROM stagex/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da01954efae1bce95c4 AS user-cpio
 FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
+FROM stagex/core-nodejs@sha256:1f705b58321b17e87ea68c04431ad83be6e6b64253d0443be4c61501902d57c3 AS core-nodejs
+
+FROM core-python AS core-python-with-requests
+RUN python -m ensurepip || true && \
+    python -m pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir requests
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
@@ -66,7 +72,8 @@ ENV KBUILD_BUILD_TIMESTAMP=1
 RUN mkdir initramfs/
 COPY --from=user-linux-nitro /nsm.ko initramfs/nsm.ko
 COPY --from=core-busybox . initramfs
-COPY --from=core-python . initramfs
+COPY --from=core-python-with-requests . initramfs
+COPY --from=core-nodejs . initramfs
 COPY --from=core-musl . initramfs
 COPY --from=core-ca-certificates /etc/ssl/certs initramfs
 COPY --from=core-busybox /bin/sh initramfs/sh
