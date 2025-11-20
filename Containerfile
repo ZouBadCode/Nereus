@@ -26,8 +26,17 @@ FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
 FROM stagex/core-nodejs@sha256:023ad02e108d2c7559938ef6922daff8f921440d6c3699b29efd303cbc1936ca AS core-nodejs
 
-FROM core-python AS core-python-with-requests
-RUN ["python3", "-m", "pip", "install", "--no-cache-dir", "--upgrade", "pip", "requests"]
+# Build a minimal Python rootfs with requests installed
+FROM scratch AS core-python-with-requests
+COPY --from=core-busybox / /
+COPY --from=core-musl / /
+COPY --from=core-zlib / /
+COPY --from=core-openssl / /
+COPY --from=core-ca-certificates / /
+COPY --from=core-python / /
+
+# At this point /bin/sh (from busybox) and python (from core-python) should both be available
+RUN python -m pip install --no-cache-dir --upgrade pip requests
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
@@ -35,25 +44,25 @@ ENV RUSTFLAGS="-C target-feature=+crt-static"
 ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
 ENV OPENSSL_STATIC=true
 
-COPY --from=core-busybox . /
-COPY --from=core-musl . /
-COPY --from=core-libunwind . /
-COPY --from=core-openssl . /
-COPY --from=core-zlib . /
-COPY --from=core-ca-certificates . /
-COPY --from=core-libzstd . /
-COPY --from=core-binutils . /
-COPY --from=core-pkgconf . /
-COPY --from=core-git . /
-COPY --from=core-rust . /
-COPY --from=user-gen_initramfs . /
-COPY --from=user-eif_build . /
-COPY --from=core-llvm . /
-COPY --from=core-gcc . /
-COPY --from=user-cpio . /
-COPY --from=user-linux-nitro /bzImage .
-COPY --from=user-linux-nitro /nsm.ko .
-COPY --from=user-linux-nitro /linux.config .
+COPY --from=core-busybox / /
+COPY --from=core-musl / /
+COPY --from=core-libunwind / /
+COPY --from=core-openssl / /
+COPY --from=core-zlib / /
+COPY --from=core-ca-certificates / /
+COPY --from=core-libzstd / /
+COPY --from=core-binutils / /
+COPY --from=core-pkgconf / /
+COPY --from=core-git / /
+COPY --from=core-rust / /
+COPY --from=user-gen_initramfs / /
+COPY --from=user-eif_build / /
+COPY --from=core-llvm / /
+COPY --from=core-gcc / /
+COPY --from=user-cpio / /
+COPY --from=user-linux-nitro /bzImage /
+COPY --from=user-linux-nitro /nsm.ko /
+COPY --from=user-linux-nitro /linux.config /
 
 FROM base as build
 COPY . .
@@ -68,17 +77,18 @@ RUN cargo build --locked --no-default-features --features $ENCLAVE_APP --release
 WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
 RUN mkdir initramfs/
+
+# Build the initramfs rootfs
 COPY --from=user-linux-nitro /nsm.ko initramfs/nsm.ko
-COPY --from=core-busybox . initramfs
-COPY --from=core-python-with-requests . initramfs
-COPY --from=core-nodejs . initramfs
-COPY --from=core-musl . initramfs
-COPY --from=core-ca-certificates /etc/ssl/certs initramfs
+COPY --from=core-python-with-requests / initramfs/
+COPY --from=core-nodejs / initramfs/
+COPY --from=core-ca-certificates /etc/ssl/certs initramfs/
 COPY --from=core-busybox /bin/sh initramfs/sh
-COPY --from=user-jq /bin/jq initramfs
-COPY --from=user-socat /bin/socat . initramfs
-RUN cp /target/${TARGET}/release/init initramfs
-RUN cp /src/nautilus-server/target/${TARGET}/release/nautilus-server initramfs
+COPY --from=user-jq /bin/jq initramfs/
+COPY --from=user-socat /bin/socat initramfs/
+
+RUN cp /target/${TARGET}/release/init initramfs/
+RUN cp /src/nautilus-server/target/${TARGET}/release/nautilus-server initramfs/
 RUN cp /src/nautilus-server/traffic_forwarder.py initramfs/
 RUN cp /src/nautilus-server/run.sh initramfs/
 
@@ -100,12 +110,12 @@ EOF
 
 WORKDIR /build_eif
 RUN eif_build \
-	--kernel /bzImage \
-	--kernel_config /linux.config \
-	--ramdisk /build_cpio/rootfs.cpio \
-	--pcrs_output /nitro.pcrs \
-	--output /nitro.eif \
-	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
+    --kernel /bzImage \
+    --kernel_config /linux.config \
+    --ramdisk /build_cpio/rootfs.cpio \
+    --pcrs_output /nitro.pcrs \
+    --output /nitro.eif \
+    --cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
 
 FROM base as install
 WORKDIR /rootfs
@@ -114,5 +124,4 @@ COPY --from=build /nitro.pcrs .
 COPY --from=build /build_cpio/rootfs.cpio .
 
 FROM scratch as package
-COPY --from=install /rootfs .
-
+COPY --from=install /rootfs / 
