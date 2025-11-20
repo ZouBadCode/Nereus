@@ -18,6 +18,18 @@ FROM stagex/core-pkgconf@sha256:fb69c51519edd6aa8e889877b48d2b6874bc5756f72d4129
 FROM stagex/core-busybox@sha256:cac5d773db1c69b832d022c469ccf5f52daf223b91166e6866d42d6983a3b374 AS core-busybox
 FROM stagex/core-python:3.11.8 AS core-python
 FROM stagex/core-libzstd@sha256:35ae8f0433cf1472f8fb25e74dc631723e9f458ca3e9544976beb724690adea8 AS core-libzstd
+
+# 這幾個是為了 build requests 用的 Python build toolchain
+FROM stagex/core-make AS core-make
+FROM stagex/core-cmake AS core-cmake
+FROM stagex/core-libffi AS core-libffi
+FROM stagex/core-py-setuptools AS core-py-setuptools
+FROM stagex/core-py-installer AS core-py-installer
+FROM stagex/core-py-packaging AS core-py-packaging
+FROM stagex/core-py-flit AS core-py-flit
+FROM stagex/core-py-wheel AS core-py-wheel
+FROM stagex/core-py-gpep517 AS core-py-gpep517
+
 FROM stagex/user-eif_build@sha256:c1d030fcaa20d26cd144ce992ba4b77665a0e9683f01a92960f9823d39401e41 AS user-eif_build
 FROM stagex/user-gen_initramfs@sha256:6c398be1eea26dcee005d11b5c063e1f7cf079710175e5d550d859c685d81825 AS user-gen_initramfs
 FROM stagex/linux-nitro@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS user-linux-nitro
@@ -26,18 +38,51 @@ FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
 FROM stagex/core-nodejs@sha256:023ad02e108d2c7559938ef6922daff8f921440d6c3699b29efd303cbc1936ca AS core-nodejs
 
-# Build a minimal Python rootfs with requests installed
-FROM scratch AS core-python-with-requests
+# =========================================================
+# 1) 建一個「只為了 requests」的 Python rootfs
+# =========================================================
+FROM scratch AS python-with-requests
+ARG REQUESTS_VERSION=2.32.3
+
+# 拼出完整的 build 環境（跟你前面那個 sample 類似）
 COPY --from=core-busybox / /
 COPY --from=core-musl / /
 COPY --from=core-zlib / /
 COPY --from=core-openssl / /
 COPY --from=core-ca-certificates / /
 COPY --from=core-python / /
+COPY --from=core-gcc / /
+COPY --from=core-binutils / /
+COPY --from=core-make / /
+COPY --from=core-cmake / /
+COPY --from=core-libffi / /
+COPY --from=core-py-setuptools / /
+COPY --from=core-py-installer / /
+COPY --from=core-py-packaging / /
+COPY --from=core-py-flit / /
+COPY --from=core-py-wheel / /
+COPY --from=core-py-gpep517 / /
 
-# At this point /bin/sh (from busybox) and python (from core-python) should both be available
-RUN python -m pip install --no-cache-dir --upgrade pip requests
+# 這個 tarball 路徑要跟你原本 fetch 機制對得上
+ADD fetch/py-requests-${REQUESTS_VERSION}.tar.gz .
+WORKDIR /requests-${REQUESTS_VERSION}
 
+# 完全離線 build wheel + 安裝到 /rootfs
+RUN --network=none <<-'EOF'
+    set -eu
+    # 用 gpep517 build wheel
+    gpep517 build-wheel --wheel-dir .dist --output-fd 3 3>&1 >&2
+
+    # 用 installer 把 wheel 安裝到 /rootfs（不是系統本身）
+    python -m installer -d /rootfs .dist/*.whl
+
+    # 清掉 __pycache__、*.pyc、*.pyo，瘦身
+    find /rootfs | grep -E "(/__pycache__$|\.pyc$|\.pyo$)" | xargs -r rm -rf
+EOF
+
+# =========================================================
+# 2) 原本的 base stage（保持不動）
+# =========================================================
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static"
@@ -64,6 +109,9 @@ COPY --from=user-linux-nitro /bzImage /
 COPY --from=user-linux-nitro /nsm.ko /
 COPY --from=user-linux-nitro /linux.config /
 
+# =========================================================
+# 3) build Rust binary & nautilus-server（保持不動）
+# =========================================================
 FROM base as build
 COPY . .
 
@@ -78,21 +126,34 @@ WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
 RUN mkdir initramfs/
 
-# Build the initramfs rootfs
+# =========================================================
+# 4) 組 initramfs，把 Python + requests rootfs 放進去
+# =========================================================
+# nsm kernel module
 COPY --from=user-linux-nitro /nsm.ko initramfs/nsm.ko
-COPY --from=core-python-with-requests / initramfs/
+
+# 這裡改成從 python-with-requests 的 /rootfs 拷，才是有裝好 requests 的 rootfs
+COPY --from=python-with-requests /rootfs/ initramfs/
+
+# Node.js
 COPY --from=core-nodejs / initramfs/
+
+# CA certs
 COPY --from=core-ca-certificates /etc/ssl/certs initramfs/
+
+# utilities
 COPY --from=core-busybox /bin/sh initramfs/sh
 COPY --from=user-jq /bin/jq initramfs/
 COPY --from=user-socat /bin/socat initramfs/
 
+# Rust binaries + app scripts
 RUN cp /target/${TARGET}/release/init initramfs/
 RUN cp /src/nautilus-server/target/${TARGET}/release/nautilus-server initramfs/
 RUN cp /src/nautilus-server/traffic_forwarder.py initramfs/
 RUN cp /src/nautilus-server/run.sh initramfs/
 
-RUN <<-EOF
+# 打 reproducible initramfs cpio.gz
+RUN <<-'EOF'
     set -eux
     cd initramfs
     find . -exec touch -hcd "@0" "{}" +
@@ -108,6 +169,9 @@ RUN <<-EOF
     > /build_cpio/rootfs.cpio
 EOF
 
+# =========================================================
+# 5) build EIF
+# =========================================================
 WORKDIR /build_eif
 RUN eif_build \
     --kernel /bzImage \
@@ -117,6 +181,9 @@ RUN eif_build \
     --output /nitro.eif \
     --cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
 
+# =========================================================
+# 6) install stage（跟原本一樣）
+# =========================================================
 FROM base as install
 WORKDIR /rootfs
 COPY --from=build /nitro.eif .
@@ -124,4 +191,4 @@ COPY --from=build /nitro.pcrs .
 COPY --from=build /build_cpio/rootfs.cpio .
 
 FROM scratch as package
-COPY --from=install /rootfs / 
+COPY --from=install /rootfs /
