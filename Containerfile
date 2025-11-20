@@ -27,9 +27,7 @@ FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82
 FROM stagex/core-nodejs@sha256:023ad02e108d2c7559938ef6922daff8f921440d6c3699b29efd303cbc1936ca AS core-nodejs
 
 FROM core-python AS core-python-with-requests
-RUN python -m ensurepip || true && \
-    python -m pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir requests
+RUN ["python", "-m", "pip", "install", "--no-cache-dir", "--upgrade", "pip", "requests"]
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
