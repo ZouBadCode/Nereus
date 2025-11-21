@@ -1,3 +1,7 @@
-# External endpoints that the enclave is allowed to access. 
+# External endpoints that the enclave is allowed to access.
+# Locked down to the internal proxy host. The proxy itself enforces
+# a second-layer whitelist for real upstream domains.
 endpoints:
-  - "*"
+  - "proxy.internal"
+  - "https://aggregator.testnet.walrus.atalma.io"
+  - "https://publisher.walrus-01.tududes.com"
