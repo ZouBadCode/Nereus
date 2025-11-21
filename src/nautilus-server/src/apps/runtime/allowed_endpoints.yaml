@@ -3,5 +3,5 @@
 # a second-layer whitelist for real upstream domains.
 endpoints:
   - "proxy.internal"
-  - "https://aggregator.testnet.walrus.atalma.io"
-  - "https://publisher.walrus-01.tududes.com"
+  - "aggregator.testnet.walrus.atalma.io"
+  - "publisher.walrus-01.tududes.com"
