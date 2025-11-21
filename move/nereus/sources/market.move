@@ -20,6 +20,7 @@ module nereus::market {
     const EInvalidAmount: u64 = 3;
     const EInvalidPrice: u64 = 4;
     const EWrongTruth: u64 = 6;
+    const EInsufficientShares: u64 = 7;
 
     /// === Constants ===
     const PRICE_SCALE: u64 = 1_000_000_000; 
@@ -28,6 +29,7 @@ module nereus::market {
 
     /// === Structs ===
 
+    /// Limit Order in the Order Book
     public struct Order has store, drop {
         id: ID,
         owner: address,
@@ -51,19 +53,29 @@ module nereus::market {
         owner: address,
         amount_usdc: u64,
         price: u64,
-        is_yes_bid: bool 
+        is_bid_for_yes: bool 
     }
 
     public struct Market has key {
         id: UID,
+        /// Escrow/Pool Balance: Holds USDC for open orders AND matched positions.
         balance: Balance<USDC>,
+        
         topic: String,
         description: String,
         start_time: u64,
         end_time: u64,
         oracle_config_id: ID,
+        
+        /// Order Book (Bids)
+        /// yes_bids: Offers to BUY YES (Paying `p` USDC)
         yes_bids: Table<u64, LinkedTable<ID, Order>>,
+        
+        /// no_bids: Offers to BUY NO (Paying `1-p` USDC)
+        /// Note: Buying NO is equivalent to Selling YES.
         no_bids: Table<u64, LinkedTable<ID, Order>>,
+
+        /// Price Discovery
         last_traded_price_yes: u64,
     }
 
@@ -100,74 +112,186 @@ module nereus::market {
         No { id: object::new(ctx), amount: 0, market_id: object::id(market) }
     }
 
-    /// === Trading Logic ===
+    /// === Manual Split / Merge Functions ===
 
-    public fun bet_yes(
-        yes_pos: &mut Yes,
+    /// **Split**: Manually convert USDC into YES + NO shares (1:1 ratio).
+    /// This allows users to mint shares without trading, effectively providing liquidity
+    /// or hedging. 
+    /// 1 USDC -> 1 YES + 1 NO.
+    public fun split_usdc(
         market: &mut Market,
+        yes_pos: &mut Yes,
+        no_pos: &mut No,
+        coin: Coin<USDC>,
+        ctx: &mut TxContext
+    ) {
+        // Check market ID
+        let market_id = object::id(market);
+        assert!(market_id == yes_pos.market_id, EWrongMarket);
+        assert!(market_id == no_pos.market_id, EWrongMarket);
+
+        let amount = coin::value(&coin);
+        assert!(amount > 0, EInvalidAmount);
+
+        // Lock USDC into the market balance
+        let bal = coin::into_balance(coin);
+        balance::join(&mut market.balance, bal);
+
+        // Mint YES and NO shares
+        yes_pos.amount = yes_pos.amount + amount;
+        no_pos.amount = no_pos.amount + amount;
+
+        // Note: Splitting does not affect `last_traded_price_yes` 
+        // because no trade occurred on the order book.
+    }
+
+    /// **Merge**: Manually combine YES + NO shares back into USDC.
+    /// 1 YES + 1 NO -> 1 USDC.
+    /// This can be done at any time, even before market resolution.
+    public fun merge_shares(
+        market: &mut Market,
+        yes_pos: &mut Yes,
+        no_pos: &mut No,
+        amount_shares: u64,
+        ctx: &mut TxContext
+    ) {
+        assert!(object::id(market) == yes_pos.market_id, EWrongMarket);
+        assert!(object::id(market) == no_pos.market_id, EWrongMarket);
+        
+        assert!(yes_pos.amount >= amount_shares, EInsufficientShares);
+        assert!(no_pos.amount >= amount_shares, EInsufficientShares);
+        assert!(amount_shares > 0, EInvalidAmount);
+
+        // Burn shares
+        yes_pos.amount = yes_pos.amount - amount_shares;
+        no_pos.amount = no_pos.amount - amount_shares;
+
+        // Unlock USDC
+        let usdc = coin::take(&mut market.balance, amount_shares, ctx);
+        transfer::public_transfer(usdc, tx_context::sender(ctx));
+    }
+
+    /// === Order Book Trading (CLOB) ===
+
+    /// **Place Limit Order**
+    /// 
+    /// This function handles both **Maker** (adding liquidity) and **Taker** (removing liquidity) logic.
+    /// 
+    /// - **Taker Flow (Matching)**: 
+    ///   If a counter-order exists, the system performs an implicit **Split**.
+    ///   Taker's USDC + Maker's USDC = 1 Unit -> Converted to YES/NO shares.
+    ///   `last_traded_price_yes` is updated.
+    /// 
+    /// - **Maker Flow (Queueing)**:
+    ///   If no match is found, the Taker becomes a Maker, and their order is added to the book.
+    /// 
+    /// @param is_bid_for_yes: true = Buy YES, false = Buy NO
+    public fun place_limit_order(
+        market: &mut Market,
+        my_yes_pos: &mut Yes, // Needed if I buy YES
+        my_no_pos: &mut No,   // Needed if I buy NO
+        is_bid_for_yes: bool,
         price: u64,
         coin: Coin<USDC>,
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        // Fix 1: Capture ID early to avoid borrow conflict later
+        // Capture Market ID early to avoid borrow checker issues
         let market_id = object::id(market);
-        
-        assert!(market_id == yes_pos.market_id, EWrongMarket);
+
+        // Basic Validations
+        if (is_bid_for_yes) {
+            assert!(market_id == my_yes_pos.market_id, EWrongMarket);
+        } else {
+            assert!(market_id == my_no_pos.market_id, EWrongMarket);
+        };
         assert!(price >= MIN_PRICE && price <= MAX_PRICE, EInvalidPrice);
-        
         let now = clock::timestamp_ms(clock);
         assert!(now >= market.start_time && now < market.end_time, EWrongTime);
 
         let mut input_value = coin::value(&coin);
         let mut input_balance = coin::into_balance(coin);
 
+        // Calculate Counter-Party Price
+        // If I buy YES at 0.6 (p), I need someone buying NO at 0.4 (1-p).
         let counter_price = PRICE_SCALE - price;
 
-        if (table::contains(&market.no_bids, counter_price)) {
-            let orders = table::borrow_mut(&mut market.no_bids, counter_price);
+        // --- Taker Logic (Matching Engine) ---
+        
+        // Determine which order book to look at
+        let has_liquidity = if (is_bid_for_yes) {
+            table::contains(&market.no_bids, counter_price)
+        } else {
+            table::contains(&market.yes_bids, counter_price)
+        };
+
+        if (has_liquidity) {
+            // Borrow the correct order book mutably
+            let orders = if (is_bid_for_yes) {
+                table::borrow_mut(&mut market.no_bids, counter_price)
+            } else {
+                table::borrow_mut(&mut market.yes_bids, counter_price)
+            };
             
             while (input_value > 0 && !linked_table::is_empty(orders)) {
                 let order_id = *option::borrow(linked_table::front(orders));
                 let order = linked_table::borrow_mut(orders, order_id);
                 
-                let my_shares = (input_value as u128) * (PRICE_SCALE as u128) / (price as u128);
-                let maker_shares = (order.amount_usdc as u128) * (PRICE_SCALE as u128) / (counter_price as u128);
+                // Calculate Shares
+                // Taker Shares (Potential)
+                let taker_shares_u128 = (input_value as u128) * (PRICE_SCALE as u128) / (price as u128);
+                // Maker Shares (Potential)
+                // Note: Maker's price is `counter_price`
+                let maker_shares_u128 = (order.amount_usdc as u128) * (PRICE_SCALE as u128) / (counter_price as u128);
                 
-                let matched_shares_u128 = if (my_shares < maker_shares) { my_shares } else { maker_shares };
-                let matched_shares = (matched_shares_u128 as u64);
-
-                if (matched_shares == 0) {
-                    break; 
+                // Matched Shares = min(Taker, Maker)
+                let matched_shares = if (taker_shares_u128 < maker_shares_u128) { 
+                    taker_shares_u128 as u64 
+                } else { 
+                    maker_shares_u128 as u64 
                 };
 
-                let my_cost = (matched_shares as u128) * (price as u128) / (PRICE_SCALE as u128);
-                let maker_cost = (matched_shares as u128) * (counter_price as u128) / (PRICE_SCALE as u128);
+                if (matched_shares == 0) { break; };
 
-                let my_cost_u64 = (my_cost as u64);
-                let maker_cost_u64 = (maker_cost as u64);
+                // Calculate USDC Cost
+                let taker_cost = ((matched_shares as u128) * (price as u128) / (PRICE_SCALE as u128)) as u64;
+                let maker_cost = ((matched_shares as u128) * (counter_price as u128) / (PRICE_SCALE as u128)) as u64;
 
-                // Execute Trade
-                let matched_bal = balance::split(&mut input_balance, my_cost_u64);
+                // === EXECUTE SPLIT / TRADE ===
+                
+                // 1. Lock Taker Funds
+                let matched_bal = balance::split(&mut input_balance, taker_cost);
                 balance::join(&mut market.balance, matched_bal);
-                input_value = input_value - my_cost_u64;
+                input_value = input_value - taker_cost;
 
-                order.amount_usdc = order.amount_usdc - maker_cost_u64;
-                
-                // Taker gets YES
-                yes_pos.amount = yes_pos.amount + matched_shares;
-                
-                // Maker gets NO
-                let maker_no_pos = No {
-                    id: object::new(ctx),
-                    amount: matched_shares,
-                    // Fix 2: Use the pre-captured market_id
-                    market_id: market_id 
+                // 2. Update Maker Order (Funds already locked)
+                order.amount_usdc = order.amount_usdc - maker_cost;
+
+                // 3. Distribute Shares (Implicit Split)
+                if (is_bid_for_yes) {
+                    // I am Taker (Buying YES), Order is Maker (Buying NO)
+                    my_yes_pos.amount = my_yes_pos.amount + matched_shares;
+                    
+                    // Send NO to Maker
+                    let maker_no = No { id: object::new(ctx), amount: matched_shares, market_id };
+                    transfer::public_transfer(maker_no, order.owner);
+                    
+                    // Update Price (YES Price)
+                    market.last_traded_price_yes = price;
+                } else {
+                    // I am Taker (Buying NO), Order is Maker (Buying YES)
+                    my_no_pos.amount = my_no_pos.amount + matched_shares;
+
+                    // Send YES to Maker
+                    let maker_yes = Yes { id: object::new(ctx), amount: matched_shares, market_id };
+                    transfer::public_transfer(maker_yes, order.owner);
+
+                    // Update Price (YES Price = Maker's Price)
+                    // If I buy NO at 0.4, Maker bought YES at 0.6.
+                    market.last_traded_price_yes = counter_price;
                 };
-                transfer::public_transfer(maker_no_pos, order.owner);
-                
-                market.last_traded_price_yes = price;
 
+                // 4. Cleanup Order
                 if (order.amount_usdc < MIN_PRICE) { 
                    let finished_order = linked_table::remove(orders, order_id);
                    let Order { id: _, owner: _, amount_usdc: _ } = finished_order;
@@ -175,107 +299,21 @@ module nereus::market {
             };
         };
 
+        // --- Maker Logic (Resting Order) ---
+        // If funds remain, place a limit order
         if (input_value > 0) {
              balance::join(&mut market.balance, input_balance);
              
-             if (!table::contains(&market.yes_bids, price)) {
-                 table::add(&mut market.yes_bids, price, linked_table::new(ctx));
+             let target_table = if (is_bid_for_yes) { &mut market.yes_bids } else { &mut market.no_bids };
+
+             if (!table::contains(target_table, price)) {
+                 table::add(target_table, price, linked_table::new(ctx));
              };
-             let queue = table::borrow_mut(&mut market.yes_bids, price);
+             let queue = table::borrow_mut(target_table, price);
              
              let order_uid = object::new(ctx);
              let order_id = object::uid_to_inner(&order_uid);
              
-             let order = Order {
-                 id: order_id,
-                 owner: tx_context::sender(ctx),
-                 amount_usdc: input_value
-             };
-             object::delete(order_uid); 
-             linked_table::push_back(queue, order_id, order);
-        } else {
-            balance::destroy_zero(input_balance);
-        };
-    }
-
-    public fun bet_no(
-        no_pos: &mut No,
-        market: &mut Market,
-        price: u64, 
-        coin: Coin<USDC>,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        // Fix 3: Capture ID early here too
-        let market_id = object::id(market);
-
-        assert!(market_id == no_pos.market_id, EWrongMarket);
-        assert!(price >= MIN_PRICE && price <= MAX_PRICE, EInvalidPrice);
-        
-        let now = clock::timestamp_ms(clock);
-        assert!(now >= market.start_time && now < market.end_time, EWrongTime);
-
-        let mut input_value = coin::value(&coin);
-        let mut input_balance = coin::into_balance(coin);
-
-        let target_yes_price = PRICE_SCALE - price;
-        
-        if (table::contains(&market.yes_bids, target_yes_price)) {
-            let orders = table::borrow_mut(&mut market.yes_bids, target_yes_price);
-
-            while (input_value > 0 && !linked_table::is_empty(orders)) {
-                let order_id = *option::borrow(linked_table::front(orders));
-                let order = linked_table::borrow_mut(orders, order_id);
-
-                let my_shares = (input_value as u128) * (PRICE_SCALE as u128) / (price as u128);
-                let maker_shares = (order.amount_usdc as u128) * (PRICE_SCALE as u128) / (target_yes_price as u128);
-
-                let matched_shares_u128 = if (my_shares < maker_shares) { my_shares } else { maker_shares };
-                let matched_shares = (matched_shares_u128 as u64);
-
-                if (matched_shares == 0) { break; };
-
-                let my_cost = (matched_shares as u128) * (price as u128) / (PRICE_SCALE as u128);
-                let maker_cost = (matched_shares as u128) * (target_yes_price as u128) / (PRICE_SCALE as u128);
-
-                let my_cost_u64 = (my_cost as u64);
-                let maker_cost_u64 = (maker_cost as u64);
-
-                let matched_bal = balance::split(&mut input_balance, my_cost_u64);
-                balance::join(&mut market.balance, matched_bal);
-                input_value = input_value - my_cost_u64;
-
-                order.amount_usdc = order.amount_usdc - maker_cost_u64;
-
-                no_pos.amount = no_pos.amount + matched_shares;
-
-                let maker_yes_pos = Yes {
-                    id: object::new(ctx),
-                    amount: matched_shares,
-                    // Fix 4: Use the pre-captured market_id
-                    market_id: market_id 
-                };
-                transfer::public_transfer(maker_yes_pos, order.owner);
-
-                market.last_traded_price_yes = target_yes_price;
-
-                if (order.amount_usdc < MIN_PRICE) {
-                    let finished_order = linked_table::remove(orders, order_id);
-                    let Order { id: _, owner: _, amount_usdc: _ } = finished_order;
-                };
-            }
-        };
-        
-        if (input_value > 0) {
-             balance::join(&mut market.balance, input_balance);
-             
-             if (!table::contains(&market.no_bids, price)) {
-                 table::add(&mut market.no_bids, price, linked_table::new(ctx));
-             };
-             let queue = table::borrow_mut(&mut market.no_bids, price);
-             
-             let order_uid = object::new(ctx);
-             let order_id = object::uid_to_inner(&order_uid);
              let order = Order {
                  id: order_id,
                  owner: tx_context::sender(ctx),
@@ -290,6 +328,7 @@ module nereus::market {
 
     /// === Settlement ===
 
+    /// Redeem YES shares after Oracle resolution (Winner)
     public fun redeem_yes(
         yes_bet: &Yes,
         market: &mut Market,
@@ -298,8 +337,7 @@ module nereus::market {
         ctx: &mut TxContext
     ) {
         assert!(object::id(market) == yes_bet.market_id, EWrongMarket);
-        
-        // 修正點：檢查 Market 記錄的 oracle_id 是否等於傳入的 truth 物件 ID
+        // Verify that the provided Oracle matches the Market's config
         assert!(market.oracle_config_id == object::id(truth), EWrongMarket);
         
         assert!(clock::timestamp_ms(clock) >= market.end_time, EWrongTime);
@@ -310,6 +348,7 @@ module nereus::market {
         transfer::public_transfer(reward, ctx.sender());
     }
 
+    /// Redeem NO shares after Oracle resolution (Winner)
     public fun redeem_no(
         no_bet: &No,
         market: &mut Market,
@@ -318,8 +357,6 @@ module nereus::market {
         ctx: &mut TxContext
     ) {
         assert!(object::id(market) == no_bet.market_id, EWrongMarket);
-        
-        // 修正點：這裡也要改
         assert!(market.oracle_config_id == object::id(truth), EWrongMarket);
         
         assert!(clock::timestamp_ms(clock) >= market.end_time, EWrongTime);
@@ -339,7 +376,7 @@ module nereus::market {
     fun iter_orders(
         queue: &LinkedTable<ID, Order>, 
         price: u64, 
-        is_yes_bid: bool
+        is_bid_for_yes: bool
     ): vector<OrderView> {
         let mut views = vector::empty<OrderView>();
         let mut current_opt = linked_table::front(queue);
@@ -353,7 +390,7 @@ module nereus::market {
                 owner: order.owner,
                 amount_usdc: order.amount_usdc,
                 price,
-                is_yes_bid
+                is_bid_for_yes
             });
 
             current_opt = linked_table::next(queue, id);
@@ -398,5 +435,13 @@ module nereus::market {
         };
 
         all_orders
+    }
+
+    public fun yes_amount(yes: &Yes): u64 {
+        yes.amount
+    }
+
+    public fun no_amount(no: &No): u64 {
+        no.amount
     }
 }
