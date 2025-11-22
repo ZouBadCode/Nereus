@@ -44,6 +44,3 @@ walrus_rs = "0.1.4"
 default = ["runtime"]
 
 runtime = []
-weather-example = []
-twitter-example = []
-seal-example = []
