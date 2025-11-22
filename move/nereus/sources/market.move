@@ -241,14 +241,36 @@ public fun withdraw_no(market: &mut Market, amount: u64, ctx: &mut TxContext) {
 /// === 新增功能：不經過市場直接鑄造 (Split) ===
 /// 將 USDC 轉換為等量的 YES 和 NO (1:1:1)
 /// 這增加了 Vault 中的 YES 和 NO 餘額
-public fun mint_complete_set(market: &mut Market, payment: Coin<USDC>, ctx: &mut TxContext) {
+public fun mint_complete_set(
+    market: &mut Market,
+    payment: Coin<USDC>,
+    amount: u64, // 新增：指定金額
+    ctx: &mut TxContext,
+) {
     let sender = tx_context::sender(ctx);
-    let amount = coin::value(&payment);
+    let input_value = coin::value(&payment);
 
-    // 1. 將 USDC 存入資金池
-    balance::join(&mut market.balance, coin::into_balance(payment));
+    // 1. 檢查餘額是否足夠
+    assert!(input_value >= amount, EInsufficientBalance);
 
-    // 2. 在 Vault 中增加 YES 和 NO 的餘額
+    // 2. 將 Coin 轉換為 Balance 以便進行切分
+    let mut input_balance = coin::into_balance(payment);
+
+    // 3. 從輸入的資金中切分出指定 amount
+    let mint_balance = balance::split(&mut input_balance, amount);
+
+    // 4. 將切分出的資金存入市場資金池
+    balance::join(&mut market.balance, mint_balance);
+
+    // 5. 處理找零：如果還有剩餘資金，轉回給使用者
+    if (balance::value(&input_balance) > 0) {
+        let change = coin::from_balance(input_balance, ctx);
+        transfer::public_transfer(change, sender);
+    } else {
+        balance::destroy_zero(input_balance);
+    };
+
+    // 6. 在 Vault 中增加 YES 和 NO 的餘額
     increase_balance(market, sender, ASSET_YES, amount);
     increase_balance(market, sender, ASSET_NO, amount);
 
