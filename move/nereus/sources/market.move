@@ -2,13 +2,16 @@ module nereus::market;
 
 use nereus::truth_oracle::{Self, TruthOracleHolder};
 use nereus::usdc::USDC;
+use std::option::{Self, Option};
 use std::string::String;
+use std::vector;
 use sui::balance::{Self, Balance};
 use sui::bcs;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::event;
 use sui::hash::blake2b256;
+use sui::linked_table::{Self, LinkedTable};
 use sui::object::{Self, UID, ID};
 use sui::table::{Self, Table};
 use sui::transfer;
@@ -24,9 +27,14 @@ const EWrongTruth: u64 = 6;
 const ENotCrossing: u64 = 7;
 const EMismatchedTokenIds: u64 = 8;
 const EInvalidPrice: u64 = 9;
+const ENotOwner: u64 = 10;
 
 /// === Constants ===
-const PRICE_SCALE: u64 = 1_000_000_000;
+const PRICE_SCALE: u64 = 1_000_000_000; // 1.0 = 10^9
+
+/// === 新增：價格限制常數 (1% ~ 99%) ===
+const MIN_PRICE: u64 = 10_000_000; // 1% (0.01)
+const MAX_PRICE: u64 = 990_000_000; // 99% (0.99)
 
 // Side definition
 const SIDE_BUY: u8 = 0;
@@ -37,37 +45,33 @@ const ASSET_YES: u8 = 1;
 const ASSET_NO: u8 = 0;
 
 // Match Types
-const MATCH_COMPLEMENTARY: u8 = 0; // Buy YES vs Sell YES
-const MATCH_MINT: u8 = 1; // Buy YES vs Buy NO (Complimentary Outcomes)
-const MATCH_MERGE: u8 = 2; // Sell YES vs Sell NO
+const MATCH_COMPLEMENTARY: u8 = 0;
+const MATCH_MINT: u8 = 1;
+const MATCH_MERGE: u8 = 2;
 
 /// === Structs ===
 
-/// 鏈下訂單結構 (不會儲存在鏈上，只作為參數傳入)
 public struct Order has copy, drop, store {
     maker: address,
-    maker_amount: u64, // Maker 願意支付的數量
-    taker_amount: u64, // Maker 想要獲得的數量
-    maker_role: u8, // 0 = Buy, 1 = Sell
-    token_id: u8, // 1 = YES, 0 = NO
+    maker_amount: u64,
+    taker_amount: u64,
+    maker_role: u8,
+    token_id: u8,
     expiration: u64,
-    salt: u64, // 防止 hash 碰撞
+    salt: u64,
 }
 
-/// 訂單狀態 (儲存在鏈上，防止重放)
 public struct OrderStatus has drop, store {
     remaining: u64,
     is_cancelled: bool,
 }
 
-/// 代表 YES 份額的物件 (可從 Vault 提領出來)
 public struct Yes has key, store {
     id: UID,
     amount: u64,
     market_id: ID,
 }
 
-/// 代表 NO 份額的物件 (可從 Vault 提領出來)
 public struct No has key, store {
     id: UID,
     amount: u64,
@@ -76,25 +80,20 @@ public struct No has key, store {
 
 public struct Market has key {
     id: UID,
-    /// 用於存放所有抵押品 (USDC) 的餘額
-    /// 這包含兩部分：
-    /// 1. 用戶存入 Vault 的閒置資金
-    /// 2. 已經鑄造成 YES/NO 但尚未結算的鎖定資金
     balance: Balance<USDC>,
     topic: String,
     description: String,
     start_time: u64,
     end_time: u64,
     oracle_config_id: ID,
-    /// === Vault Logic ===
-    /// 用戶在合約內的餘額表。
-    /// Maker 必須先 deposit 才能下單。
-    vault_usdc: Table<address, u64>, // 用戶 -> USDC 餘額
-    vault_yes: Table<address, u64>, // 用戶 -> YES 餘額
-    vault_no: Table<address, u64>, // 用戶 -> NO 餘額
-    /// === Order Logic ===
-    /// 記錄訂單哈希的執行狀態
+    vault_usdc: Table<address, u64>,
+    vault_yes: Table<address, u64>,
+    vault_no: Table<address, u64>,
     order_statuses: Table<vector<u8>, OrderStatus>,
+    active_orders: LinkedTable<vector<u8>, Order>,
+    /// 最新成交價格 (YES 的機率)
+    /// 範圍限制在 1% ~ 99% (10_000_000 ~ 990_000_000)
+    last_yes_price: u64,
 }
 
 /// === Events ===
@@ -105,6 +104,20 @@ public struct OrderFilled has copy, drop {
     maker_amount: u64,
     taker_amount: u64,
     match_type: u8,
+    price: u64,
+}
+
+public struct OrderPosted has copy, drop {
+    order_hash: vector<u8>,
+    maker: address,
+    maker_amount: u64,
+    taker_amount: u64,
+    token_id: u8,
+}
+
+public struct OrderCancelled has copy, drop {
+    order_hash: vector<u8>,
+    maker: address,
 }
 
 /// === Initialization ===
@@ -129,11 +142,16 @@ public fun create_market(
         vault_yes: table::new(ctx),
         vault_no: table::new(ctx),
         order_statuses: table::new(ctx),
+        active_orders: linked_table::new(ctx),
+        // 初始化價格為 0.5 (50%)
+        last_yes_price: PRICE_SCALE / 2,
     };
     transfer::share_object(market);
 }
 
-// Helper to mint zero value objects (unchanged)
+// ... (Helper functions: zero_yes, zero_no, deposit_*, withdraw_*, post_order, cancel_posted_order, get_active_orders) ...
+// 這些函數保持不變，為了節省篇幅省略
+
 public fun zero_yes(market: &mut Market, ctx: &mut TxContext): Yes {
     Yes { id: object::new(ctx), amount: 0, market_id: object::id(market) }
 }
@@ -142,89 +160,61 @@ public fun zero_no(market: &mut Market, ctx: &mut TxContext): No {
     No { id: object::new(ctx), amount: 0, market_id: object::id(market) }
 }
 
-/// === Vault Management (Deposit / Withdraw) ===
-
-/// 存入 USDC 到合約 Vault，以便作為 Maker 掛單
 public fun deposit_usdc(market: &mut Market, coin: Coin<USDC>, ctx: &mut TxContext) {
     let sender = tx_context::sender(ctx);
     let amount = coin::value(&coin);
     balance::join(&mut market.balance, coin::into_balance(coin));
-
     let bal = if (table::contains(&market.vault_usdc, sender)) {
         *table::borrow(&market.vault_usdc, sender)
     } else { 0 };
-
     if (table::contains(&market.vault_usdc, sender)) {
         *table::borrow_mut(&mut market.vault_usdc, sender) = bal + amount;
-    } else {
-        table::add(&mut market.vault_usdc, sender, amount);
-    };
+    } else { table::add(&mut market.vault_usdc, sender, amount); };
 }
 
-/// 從 Vault 提領 USDC
 public fun withdraw_usdc(market: &mut Market, amount: u64, ctx: &mut TxContext) {
     let sender = tx_context::sender(ctx);
     assert!(table::contains(&market.vault_usdc, sender), EInsufficientBalance);
-
     let bal_ref = table::borrow_mut(&mut market.vault_usdc, sender);
     assert!(*bal_ref >= amount, EInsufficientBalance);
     *bal_ref = *bal_ref - amount;
-
     let withdraw_coin = coin::take(&mut market.balance, amount, ctx);
     transfer::public_transfer(withdraw_coin, sender);
 }
 
-/// 存入 Position (YES/NO) 到 Vault 以便賣出
-public fun deposit_position(
-    market: &mut Market,
-    yes_pos: Yes, // 如果要存 NO，可以另寫一個函數或用泛型封裝，這裡為演示分開寫
-    ctx: &mut TxContext,
-) {
+public fun deposit_position(market: &mut Market, yes_pos: Yes, ctx: &mut TxContext) {
     assert!(yes_pos.market_id == object::id(market), EWrongMarket);
     let sender = tx_context::sender(ctx);
     let amount = yes_pos.amount;
-
-    // Destroy object, move balance to table
     let Yes { id, amount: _, market_id: _ } = yes_pos;
     object::delete(id);
-
     let bal = if (table::contains(&market.vault_yes, sender)) {
         *table::borrow(&market.vault_yes, sender)
     } else { 0 };
-
     if (table::contains(&market.vault_yes, sender)) {
         *table::borrow_mut(&mut market.vault_yes, sender) = bal + amount;
-    } else {
-        table::add(&mut market.vault_yes, sender, amount);
-    };
+    } else { table::add(&mut market.vault_yes, sender, amount); };
 }
 
 public fun deposit_no_position(market: &mut Market, no_pos: No, ctx: &mut TxContext) {
     assert!(no_pos.market_id == object::id(market), EWrongMarket);
     let sender = tx_context::sender(ctx);
     let amount = no_pos.amount;
-
     let No { id, amount: _, market_id: _ } = no_pos;
     object::delete(id);
-
     let bal = if (table::contains(&market.vault_no, sender)) {
         *table::borrow(&market.vault_no, sender)
     } else { 0 };
-
     if (table::contains(&market.vault_no, sender)) {
         *table::borrow_mut(&mut market.vault_no, sender) = bal + amount;
-    } else {
-        table::add(&mut market.vault_no, sender, amount);
-    };
+    } else { table::add(&mut market.vault_no, sender, amount); };
 }
 
-/// 從 Vault 提領 YES Position
 public fun withdraw_yes(market: &mut Market, amount: u64, ctx: &mut TxContext) {
     let sender = tx_context::sender(ctx);
     let bal_ref = table::borrow_mut(&mut market.vault_yes, sender);
     assert!(*bal_ref >= amount, EInsufficientBalance);
     *bal_ref = *bal_ref - amount;
-
     let yes_obj = Yes { id: object::new(ctx), amount, market_id: object::id(market) };
     transfer::public_transfer(yes_obj, sender);
 }
@@ -234,55 +224,118 @@ public fun withdraw_no(market: &mut Market, amount: u64, ctx: &mut TxContext) {
     let bal_ref = table::borrow_mut(&mut market.vault_no, sender);
     assert!(*bal_ref >= amount, EInsufficientBalance);
     *bal_ref = *bal_ref - amount;
-
     let no_obj = No { id: object::new(ctx), amount, market_id: object::id(market) };
     transfer::public_transfer(no_obj, sender);
 }
 
+public fun post_order(market: &mut Market, order: Order, ctx: &mut TxContext) {
+    let sender = tx_context::sender(ctx);
+    assert!(order.maker == sender, ENotOwner);
+    if (order.maker_role == SIDE_BUY) {
+        let bal = if (table::contains(&market.vault_usdc, sender)) {
+            *table::borrow(&market.vault_usdc, sender)
+        } else { 0 };
+        assert!(bal >= order.maker_amount, EInsufficientBalance);
+    } else {
+        let bal = if (order.token_id == ASSET_YES) {
+            if (table::contains(&market.vault_yes, sender)) {
+                *table::borrow(&market.vault_yes, sender)
+            } else { 0 }
+        } else {
+            if (table::contains(&market.vault_no, sender)) {
+                *table::borrow(&market.vault_no, sender)
+            } else { 0 }
+        };
+        assert!(bal >= order.maker_amount, EInsufficientBalance);
+    };
+    let order_hash = hash_order(&order);
+    if (!linked_table::contains(&market.active_orders, order_hash)) {
+        linked_table::push_back(&mut market.active_orders, order_hash, order);
+        event::emit(OrderPosted {
+            order_hash,
+            maker: sender,
+            maker_amount: order.maker_amount,
+            taker_amount: order.taker_amount,
+            token_id: order.token_id,
+        });
+    };
+}
+
+public fun cancel_posted_order(market: &mut Market, order: Order, ctx: &mut TxContext) {
+    let sender = tx_context::sender(ctx);
+    assert!(order.maker == sender, ENotOwner);
+    let order_hash = hash_order(&order);
+    if (!table::contains(&market.order_statuses, order_hash)) {
+        table::add(
+            &mut market.order_statuses,
+            order_hash,
+            OrderStatus { remaining: order.maker_amount, is_cancelled: true },
+        );
+    } else {
+        let status = table::borrow_mut(&mut market.order_statuses, order_hash);
+        status.is_cancelled = true;
+    };
+    if (linked_table::contains(&market.active_orders, order_hash)) {
+        linked_table::remove(&mut market.active_orders, order_hash);
+    };
+    event::emit(OrderCancelled { order_hash, maker: sender });
+}
+
+public fun get_active_orders(market: &Market): vector<Order> {
+    let mut orders = vector::empty<Order>();
+    let mut node_opt = linked_table::front(&market.active_orders);
+    while (option::is_some(node_opt)) {
+        let order_hash = *option::borrow(node_opt);
+        let order = *linked_table::borrow(&market.active_orders, order_hash);
+        vector::push_back(&mut orders, order);
+        node_opt = linked_table::next(&market.active_orders, order_hash);
+    };
+    orders
+}
+
+public fun get_market_price(market: &Market): u64 {
+    market.last_yes_price
+}
+
 /// === CTF Trading Logic (Core) ===
 
-/// 撮合兩筆訂單 (Maker vs Taker)
-/// 在這個模型中，兩個訂單都是 Order 結構。
-/// 通常 Taker 是主動方，Maker 是被動方（簽名掛單）。
-/// 但為了符合 `match_orders` 的概念，我們將其視為兩個意圖的碰撞。
 public fun match_orders(
     market: &mut Market,
     taker_order: Order,
     maker_order: Order,
-    fill_amount_making: u64, // 基於 Maker 的 making amount 填單數量
+    fill_amount_making: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // 1. 驗證訂單有效性 (過期時間等)
-    // 注意：這裡省略了簽名驗證，實際應用需傳入 maker_signature 並驗證
+    // 1. 驗證
     verify_order_validity(market, &maker_order, clock);
-    verify_order_validity(market, &taker_order, clock); // Taker 其實是用戶當下交易，通常不需要簽名驗證，但檢查參數是好的
+    verify_order_validity(market, &taker_order, clock);
 
-    // 2. 更新 Maker 的訂單狀態 (防止超額成交)
+    // 2. 更新 Maker 的訂單狀態
     let maker_hash = hash_order(&maker_order);
-    update_order_status(market, maker_hash, maker_order.maker_amount, fill_amount_making);
-
-    // Taker 這裡假設是當下執行，不存儲狀態 (或者也可以存，看業務邏輯)
+    update_order_status(market, maker_hash, &maker_order, fill_amount_making);
 
     // 3. 判斷撮合類型
     let match_type = derive_match_type(&taker_order, &maker_order);
 
-    // 4. 驗證價格是否匹配 (Is Crossing)
+    // 4. 驗證價格
     validate_crossing(&taker_order, &maker_order, match_type);
 
-    // 5. 計算 Taker 需要的數量 (Taking Amount)
-    // taking = making * taker_amt / maker_amt
+    // 5. 計算 Taker 數量
     let fill_amount_taking =
         (fill_amount_making as u128) * (maker_order.taker_amount as u128) / (maker_order.maker_amount as u128);
     let fill_amount_taking = fill_amount_taking as u64;
 
-    // 6. 執行資金轉移/鑄造/銷毀
+    // === 更新市場價格 ===
+    update_market_price(market, &maker_order);
+
+    // 6. 執行資金轉移
     execute_trade(
         market,
-        taker_order.maker, // Taker Address
-        maker_order.maker, // Maker Address
-        fill_amount_taking, // Taker Gives (Maker Wants)
-        fill_amount_making, // Maker Gives (Taker Wants)
+        taker_order.maker,
+        maker_order.maker,
+        fill_amount_taking,
+        fill_amount_making,
         &taker_order,
         &maker_order,
         match_type,
@@ -295,84 +348,181 @@ public fun match_orders(
         maker_amount: fill_amount_making,
         taker_amount: fill_amount_taking,
         match_type,
+        price: market.last_yes_price,
     });
 }
 
-/// 執行具體的資產變動
+/// === 修改：更新市場價格 (加入 1~99 限制) ===
+fun update_market_price(market: &mut Market, maker_order: &Order) {
+    let (usdc_amount, share_amount) = if (maker_order.maker_role == SIDE_BUY) {
+        (maker_order.maker_amount, maker_order.taker_amount)
+    } else {
+        (maker_order.taker_amount, maker_order.maker_amount)
+    };
+
+    if (share_amount == 0) return;
+
+    let price_u128 = (usdc_amount as u128) * (PRICE_SCALE as u128) / (share_amount as u128);
+    let raw_price = price_u128 as u64;
+
+    // 計算目標 YES 價格
+    let mut target_yes_price = if (maker_order.token_id == ASSET_YES) {
+        raw_price
+    } else {
+        if (raw_price <= PRICE_SCALE) {
+            PRICE_SCALE - raw_price
+        } else {
+            0
+        }
+    };
+
+    // === 實施價格限制 (Clamping) ===
+    // 確保價格在 MIN_PRICE (1%) 和 MAX_PRICE (99%) 之間
+    if (target_yes_price < MIN_PRICE) {
+        target_yes_price = MIN_PRICE;
+    };
+    if (target_yes_price > MAX_PRICE) {
+        target_yes_price = MAX_PRICE;
+    };
+
+    market.last_yes_price = target_yes_price;
+}
+
 fun execute_trade(
     market: &mut Market,
     taker: address,
     maker: address,
-    taker_gives: u64, // 這裡是 Maker "收到" 的數量 (根據訂單比例計算出的結果)
-    maker_gives: u64, // 這裡是 Maker "付出" 的數量
+    taker_gives: u64,
+    maker_gives: u64,
     taker_order: &Order,
     maker_order: &Order,
     match_type: u8,
 ) {
     if (match_type == MATCH_COMPLEMENTARY) {
-        // 普通交換 (Swap) logic remains the same
-        // Maker Role: Buy YES (Pays USDC, Gets YES) OR Sell YES (Pays YES, Gets USDC)
-
         if (maker_order.maker_role == SIDE_BUY) {
-            // Maker 買入 (Maker 付 USDC, Taker 付 Position)
-            // maker_gives = USDC, taker_gives = YES/NO
-            transfer_internal(market, maker, taker, maker_gives, 2); // 2 represents USDC
+            transfer_internal(market, maker, taker, maker_gives, 2);
             transfer_internal(market, taker, maker, taker_gives, maker_order.token_id);
         } else {
-            // Maker 賣出 (Maker 付 Position, Taker 付 USDC)
-            // maker_gives = YES/NO, taker_gives = USDC
             transfer_internal(market, maker, taker, maker_gives, maker_order.token_id);
-            transfer_internal(market, taker, maker, taker_gives, 2); // USDC
+            transfer_internal(market, taker, maker, taker_gives, 2);
         };
     } else if (match_type == MATCH_MINT) {
-        // 鑄造 (Buy YES vs Buy NO)
-        // Maker 付出 USDC (maker_gives)
-        // Maker 收到 Shares (taker_gives) <- 這是總鑄造數量
-        // Taker 必須支付剩餘的 USDC: (Total Shares - Maker USDC)
-
         let total_shares = taker_gives;
         let maker_usdc = maker_gives;
-        // 安全檢查: 價格不能 > 1.0 (理論上 validate_order 應檢查，但這裡做防護)
         assert!(total_shares >= maker_usdc, EInvalidPrice);
-
         let taker_usdc = total_shares - maker_usdc;
 
-        // 1. 扣除 Maker 的 USDC
         decrease_balance(market, maker, 2, maker_usdc);
-        // 2. 扣除 Taker 的 USDC (修正點：不是扣 taker_gives，而是差額)
         decrease_balance(market, taker, 2, taker_usdc);
-
-        // 3. 增加 Maker 的 YES/NO (maker_order.token_id)
         increase_balance(market, maker, maker_order.token_id, total_shares);
-        // 4. 增加 Taker 的 反向持倉 (taker_order.token_id)
         increase_balance(market, taker, taker_order.token_id, total_shares);
     } else if (match_type == MATCH_MERGE) {
-        // 合併 (Sell YES vs Sell NO)
-        // Maker 付出 Shares (maker_gives)
-        // Maker 收到 USDC (taker_gives)
-        // Taker 也必須付出 Shares (數量等於 maker_gives，因為是一對一銷毀)
-        // Taker 收到剩餘的 USDC: (Total Shares - Maker USDC Received)
-
         let total_shares_burned = maker_gives;
         let maker_usdc_received = taker_gives;
         assert!(total_shares_burned >= maker_usdc_received, EInvalidPrice);
-
         let taker_usdc_received = total_shares_burned - maker_usdc_received;
 
-        // 1. 扣除 Maker 的 Position
         decrease_balance(market, maker, maker_order.token_id, total_shares_burned);
-        // 2. 扣除 Taker 的 Position (修正點：Taker 付出的份額數量等於 Maker 付出的數量)
         decrease_balance(market, taker, taker_order.token_id, total_shares_burned);
-
-        // 3. 給 Maker USDC
         increase_balance(market, maker, 2, maker_usdc_received);
-        // 4. 給 Taker USDC (修正點：剩餘的 USDC)
         increase_balance(market, taker, 2, taker_usdc_received);
     }
 }
 
-// --- Internal Balance Helpers ---
-// asset_type: 0=NO, 1=YES, 2=USDC
+/// === 新增：進階查詢功能 ===
+
+/// 取得買單 (Bids)
+/// @param token_id: 想要篩選的代幣 (Some(ASSET_YES) 或 Some(ASSET_NO))，傳入 None 表示不篩選
+/// @param cursor: 上一次查詢的最後一個 order_hash (第一頁傳 None)
+/// @param limit: 限制回傳數量
+/// @return (訂單列表, 下一頁的 Cursor)
+public fun get_bids(
+    market: &Market,
+    token_id: Option<u8>,
+    cursor: Option<vector<u8>>,
+    limit: u64,
+): (vector<Order>, Option<vector<u8>>) {
+    // Role 0 = Buy
+    get_orders_iterator(market, option::some(SIDE_BUY), token_id, cursor, limit)
+}
+
+/// 取得賣單 (Asks)
+public fun get_asks(
+    market: &Market,
+    token_id: Option<u8>,
+    cursor: Option<vector<u8>>,
+    limit: u64,
+): (vector<Order>, Option<vector<u8>>) {
+    // Role 1 = Sell
+    get_orders_iterator(market, option::some(SIDE_SELL), token_id, cursor, limit)
+}
+
+/// 底層迭代器 (Iterator)
+/// 負責遍歷 LinkedTable 並篩選資料
+fun get_orders_iterator(
+    market: &Market,
+    filter_role: Option<u8>,
+    filter_token: Option<u8>,
+    cursor: Option<vector<u8>>,
+    limit: u64,
+): (vector<Order>, Option<vector<u8>>) {
+    let mut res = vector::empty<Order>();
+    let mut count = 0;
+
+    // 決定起始點
+    // 如果有 cursor，從 cursor 的下一個開始；否則從頭開始
+    let mut current_opt = if (option::is_some(&cursor)) {
+        linked_table::next(&market.active_orders, *option::borrow(&cursor))
+    } else {
+        linked_table::front(&market.active_orders)
+    };
+
+    // 用來記錄最後遍歷到的位置，作為下一次的 cursor
+    let mut last_scanned_hash = cursor;
+
+    // 開始遍歷
+    while (option::is_some(current_opt) && count < limit) {
+        let order_hash = *option::borrow(current_opt);
+        let order = *linked_table::borrow(&market.active_orders, order_hash);
+
+        // 更新最後掃描到的 Hash
+        last_scanned_hash = option::some(order_hash);
+
+        // 檢查過濾條件
+        let role_match = if (option::is_some(&filter_role)) {
+            order.maker_role == *option::borrow(&filter_role)
+        } else { true };
+
+        let token_match = if (option::is_some(&filter_token)) {
+            order.token_id == *option::borrow(&filter_token)
+        } else { true };
+
+        // 如果符合條件，加入結果
+        if (role_match && token_match) {
+            vector::push_back(&mut res, order);
+            count = count + 1;
+        };
+
+        // 移動到下一個節點
+        current_opt = linked_table::next(&market.active_orders, order_hash);
+    };
+
+    // 如果 current_opt 還有值，代表還有下一頁，回傳 last_scanned_hash
+    // 如果 current_opt 是 None，代表已經到底了，回傳 None
+    let next_cursor = if (option::is_some(current_opt)) {
+        last_scanned_hash
+    } else {
+        // 這裡有個邊緣情況：如果剛好掃到底且 count == limit，next 會是 None
+        // 但為了讓前端知道是否還有資料，最精確的做法是回傳最後掃描的 hash
+        // 只要前端再次請求時收到空列表，就知道結束了。
+        // 簡單起見：如果迴圈結束時 current_opt 是 None，就回傳 None
+        option::none()
+    };
+
+    (res, next_cursor)
+}
+
+// ... (Helper functions: transfer_internal, decrease/increase_balance 等保持不變) ...
 fun transfer_internal(
     market: &mut Market,
     from: address,
@@ -388,7 +538,6 @@ fun decrease_balance(market: &mut Market, user: address, asset_type: u8, amount:
     let table_ref = if (asset_type == ASSET_YES) { &mut market.vault_yes } else if (
         asset_type == ASSET_NO
     ) { &mut market.vault_no } else { &mut market.vault_usdc };
-
     assert!(table::contains(table_ref, user), EInsufficientBalance);
     let bal = table::borrow_mut(table_ref, user);
     assert!(*bal >= amount, EInsufficientBalance);
@@ -399,84 +548,52 @@ fun increase_balance(market: &mut Market, user: address, asset_type: u8, amount:
     let table_ref = if (asset_type == ASSET_YES) { &mut market.vault_yes } else if (
         asset_type == ASSET_NO
     ) { &mut market.vault_no } else { &mut market.vault_usdc };
-
-    if (!table::contains(table_ref, user)) {
-        table::add(table_ref, user, 0);
-    };
+    if (!table::contains(table_ref, user)) { table::add(table_ref, user, 0); };
     let bal = table::borrow_mut(table_ref, user);
     *bal = *bal + amount;
 }
 
-// --- Logic Helpers ---
-
 fun verify_order_validity(market: &Market, order: &Order, clock: &Clock) {
     let now = clock::timestamp_ms(clock);
-    // Check expiration
-    if (order.expiration > 0 && order.expiration < now) {
-        abort EOrderExpired
-    };
-    // Check signature here (omitted for brevity)
+    if (order.expiration > 0 && order.expiration < now) { abort EOrderExpired };
 }
 
-fun update_order_status(
-    market: &mut Market,
-    hash: vector<u8>,
-    total_amount: u64,
-    fill_amount: u64,
-) {
+fun update_order_status(market: &mut Market, hash: vector<u8>, order: &Order, fill_amount: u64) {
     if (!table::contains(&market.order_statuses, hash)) {
         table::add(
             &mut market.order_statuses,
             hash,
-            OrderStatus {
-                remaining: total_amount,
-                is_cancelled: false,
-            },
+            OrderStatus { remaining: order.maker_amount, is_cancelled: false },
         );
     };
     let status = table::borrow_mut(&mut market.order_statuses, hash);
     assert!(!status.is_cancelled, EOrderFilledOrCancelled);
-    assert!(status.remaining >= fill_amount, EInsufficientBalance); // Making > Remaining
-
+    assert!(status.remaining >= fill_amount, EInsufficientBalance);
     status.remaining = status.remaining - fill_amount;
     if (status.remaining == 0) {
         status.is_cancelled = true;
+        if (linked_table::contains(&market.active_orders, hash)) {
+            linked_table::remove(&mut market.active_orders, hash);
+        };
     }
 }
 
 fun derive_match_type(taker: &Order, maker: &Order): u8 {
-    // Maker Role: 0=Buy, 1=Sell
-    if (taker.maker_role == SIDE_BUY && maker.maker_role == SIDE_BUY) {
-        MATCH_MINT // Buy vs Buy
-    } else if (taker.maker_role == SIDE_SELL && maker.maker_role == SIDE_SELL) {
-        MATCH_MERGE // Sell vs Sell
-    } else {
-        MATCH_COMPLEMENTARY // Buy vs Sell
-    }
+    if (taker.maker_role == SIDE_BUY && maker.maker_role == SIDE_BUY) { MATCH_MINT } else if (
+        taker.maker_role == SIDE_SELL && maker.maker_role == SIDE_SELL
+    ) { MATCH_MERGE } else { MATCH_COMPLEMENTARY }
 }
 
 fun validate_crossing(taker: &Order, maker: &Order, match_type: u8) {
-    // Price calculation: Price = MakerAmount / TakerAmount (depends on perspective)
-    // Simplified: Check if they are compatible
-
     if (match_type == MATCH_COMPLEMENTARY) {
-        // Must trade same token (YES vs YES)
         assert!(taker.token_id == maker.token_id, EMismatchedTokenIds);
-    } else {
-        // Must trade opposite tokens (YES vs NO)
-        assert!(taker.token_id != maker.token_id, EMismatchedTokenIds);
-    }
-
-    // Price crossing check omitted for brevity, but essential in prod
-    // e.g. Taker willing to pay >= Maker asking price
+    } else { assert!(taker.token_id != maker.token_id, EMismatchedTokenIds); }
 }
 
 public fun hash_order(order: &Order): vector<u8> {
     let mut data = bcs::to_bytes(order);
     blake2b256(&data)
 }
-
-/// === Settlement ===
 
 public fun redeem_yes(
     market: &mut Market,
@@ -486,13 +603,9 @@ public fun redeem_yes(
 ) {
     verify_oracle(market, truth, clock, true);
     let sender = tx_context::sender(ctx);
-
-    // Burn YES balance from vault
     let amount = *table::borrow(&market.vault_yes, sender);
     decrease_balance(market, sender, ASSET_YES, amount);
-
-    // Payout USDC
-    let payout = coin::take(&mut market.balance, amount, ctx); // 1 YES = 1 USDC if won
+    let payout = coin::take(&mut market.balance, amount, ctx);
     transfer::public_transfer(payout, sender);
 }
 
@@ -504,10 +617,8 @@ public fun redeem_no(
 ) {
     verify_oracle(market, truth, clock, false);
     let sender = tx_context::sender(ctx);
-
     let amount = *table::borrow(&market.vault_no, sender);
     decrease_balance(market, sender, ASSET_NO, amount);
-
     let payout = coin::take(&mut market.balance, amount, ctx);
     transfer::public_transfer(payout, sender);
 }
@@ -523,9 +634,6 @@ fun verify_oracle(
     assert!(truth_oracle::get_outcome(truth) == expected_outcome, EWrongTruth);
 }
 
-// === Helper Functions (解決可見性問題) ===
-
-/// 公開的構造函數，讓外部可以創建 Order
 public fun create_order(
     maker: address,
     maker_amount: u64,
@@ -535,23 +643,9 @@ public fun create_order(
     expiration: u64,
     salt: u64,
 ): Order {
-    Order {
-        maker,
-        maker_amount,
-        taker_amount,
-        maker_role,
-        token_id,
-        expiration,
-        salt,
-    }
+    Order { maker, maker_amount, taker_amount, maker_role, token_id, expiration, salt }
 }
 
-/// 讀取 YES 物件的餘額
-public fun yes_balance(yes: &Yes): u64 {
-    yes.amount
-}
+public fun yes_balance(yes: &Yes): u64 { yes.amount }
 
-/// 讀取 NO 物件的餘額
-public fun no_balance(no: &No): u64 {
-    no.amount
-}
+public fun no_balance(no: &No): u64 { no.amount }
