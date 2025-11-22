@@ -454,3 +454,137 @@ fun test_trading_flow_and_settlement() {
     clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
+
+// =========================================================================
+// Test Case 4: Partial Fills & Multi-User (Different Amounts)
+// =========================================================================
+
+#[test]
+fun test_partial_fill_and_different_amounts() {
+    let mut scenario = ts::begin(ADMIN);
+    let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+    // 1. 初始化
+    init_test_environment(&mut scenario);
+
+    // 2. 發放資金
+    // Alice (大戶): 100 USDC
+    fund_account(&mut scenario, ALICE, 100_000_000_000);
+    // Bob (散戶1): 20 USDC
+    fund_account(&mut scenario, BOB, 20_000_000_000);
+    // Carol (散戶2): 20 USDC
+    fund_account(&mut scenario, CAROL, 20_000_000_000);
+
+    // 3. 存入 Vault (Deposit)
+    // Alice 準備掛大單：60 USDC
+    deposit_to_vault(&mut scenario, ALICE, 60_000_000_000);
+    // Bob 準備吃單：8 USDC
+    deposit_to_vault(&mut scenario, BOB, 8_000_000_000);
+    // Carol 準備吃單：4 USDC
+    deposit_to_vault(&mut scenario, CAROL, 4_000_000_000);
+
+    // 4. 執行撮合
+    ts::next_tx(&mut scenario, ADMIN);
+    {
+        let mut market = ts::take_shared<Market>(&scenario);
+        let ctx = ts::ctx(&mut scenario);
+
+        // --- 訂單定義 ---
+
+        // Alice (Maker): 我出 60 USDC，想買 100 YES。 (Price 0.6)
+        let alice_order = new_order(ALICE, 60_000_000_000, 100_000_000_000, SIDE_BUY, ASSET_YES);
+
+        // Bob (Taker 1): 我出 8 USDC，想買 20 NO。 (Price 0.4)
+        // 驗證比例: 8 / 20 = 0.4. (正確)
+        let bob_order = new_order(BOB, 8_000_000_000, 20_000_000_000, SIDE_BUY, ASSET_NO);
+
+        // Carol (Taker 2): 我出 4 USDC，想買 10 NO。 (Price 0.4)
+        let carol_order = new_order(CAROL, 4_000_000_000, 10_000_000_000, SIDE_BUY, ASSET_NO);
+
+        // --- 第一次撮合: Alice vs Bob ---
+        // Bob 出 8 USDC。
+        // Alice 應付金額 = BobAmount * (AlicePrice / BobPrice) = 8 * (0.6/0.4) = 12 USDC.
+        // fill_amount_making 填入 12 USDC
+        market::match_orders(
+            &mut market,
+            bob_order,
+            alice_order, // 注意：這裡傳入的是同一個 alice_order 結構
+            12_000_000_000,
+            &clock,
+            ctx,
+        );
+
+        // --- 第二次撮合: Alice vs Carol ---
+        // Carol 出 4 USDC。
+        // Alice 應付金額 = 4 * (0.6/0.4) = 6 USDC.
+        // fill_amount_making 填入 6 USDC
+        market::match_orders(
+            &mut market,
+            carol_order,
+            alice_order, // 再次傳入 alice_order，合約會檢查剩餘額度
+            6_000_000_000,
+            &clock,
+            ctx,
+        );
+
+        ts::return_shared(market);
+    };
+
+    // 5. 驗證 Alice (Maker) 的狀態
+    ts::next_tx(&mut scenario, ALICE);
+    {
+        let mut market = ts::take_shared<Market>(&scenario);
+        let ctx = ts::ctx(&mut scenario);
+
+        // 驗證 YES 數量:
+        // 第一次成交: Bob (8 USDC) + Alice (12 USDC) = 20 YES
+        // 第二次成交: Carol (4 USDC) + Alice (6 USDC) = 10 YES
+        // 總共應該有 30 YES
+        market::withdraw_yes(&mut market, 30_000_000_000, ctx);
+
+        // 驗證剩餘資金 (USDC):
+        // 初始存入 60 - 第一次扣除 12 - 第二次扣除 6 = 42 USDC
+        market::withdraw_usdc(&mut market, 42_000_000_000, ctx);
+
+        ts::return_shared(market);
+    };
+
+    // 6. 驗證 Bob (Taker 1) 的狀態
+    ts::next_tx(&mut scenario, BOB);
+    {
+        let mut market = ts::take_shared<Market>(&scenario);
+        let ctx = ts::ctx(&mut scenario);
+
+        // Bob 應該獲得 20 NO
+        market::withdraw_no(&mut market, 20_000_000_000, ctx);
+
+        // Bob 的 USDC 應該全用光 (Vault 剩 0)
+        // 如果嘗試提款應該失敗，這裡我們只驗證 NO
+
+        ts::return_shared(market);
+    };
+
+    // 7. 驗證 Carol (Taker 2) 的狀態
+    ts::next_tx(&mut scenario, CAROL);
+    {
+        let mut market = ts::take_shared<Market>(&scenario);
+        let ctx = ts::ctx(&mut scenario);
+
+        // Carol 應該獲得 10 NO
+        market::withdraw_no(&mut market, 10_000_000_000, ctx);
+
+        ts::return_shared(market);
+    };
+
+    // 8. 檢查錢包 (Double Check)
+    ts::next_tx(&mut scenario, ALICE);
+    {
+        let yes_pos = ts::take_from_sender<Yes>(&scenario);
+        // 確保提出來的確實是 30
+        assert!(market::yes_balance(&yes_pos) == 30_000_000_000, 1);
+        ts::return_to_sender(&scenario, yes_pos);
+    };
+
+    clock::destroy_for_testing(clock);
+    ts::end(scenario);
+}
