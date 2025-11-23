@@ -905,7 +905,7 @@ fun test_get_bids_asks_paged_test_2() {
 
         // 第二頁：從 cursor1 開始，取剩餘的
         // === 修正 3: 將 cursor2 改為 _cursor2 或 _ 以忽略警告 ===
-        let (bids_page2, _cursor2) = market::get_bids(
+        let (bids_page2, cursor2) = market::get_bids(
             &market,
             std::option::some(ASSET_YES),
             cursor1,
