@@ -126,16 +126,65 @@ case $OPTION in
         ;;
 
     3)
-        echo -e "${YELLOW}=== 掛單 (Buy YES) - PTB Mode ===${NC}"
+        echo -e "${YELLOW}=== 掛單 (Place Order) - PTB Mode ===${NC}"
         echo "使用 PTB 在單筆交易中執行: create_order -> post_order"
         
-        # 1. 獲取當前使用者地址 (create_order 需要傳入 maker 地址)
+        # 1. 獲取當前使用者地址
         SENDER=$(sui client active-address)
         echo "Maker Address: $SENDER"
+        echo "--------------------------------"
 
-        read -p "您願意付出多少 USDC? (Maker Amount): " M_Input
-        read -p "您想要獲得多少 YES? (Taker Amount): " T_Input
+        # === Step A: 選擇方向 (Side) ===
+        echo "請選擇交易方向:"
+        echo "1) Buy (買入 - 用 USDC 換 Token)"
+        echo "2) Sell (賣出 - 用 Token 換 USDC)"
+        read -p "選項 (預設 1): " SIDE_OPT
         
+        if [ "$SIDE_OPT" == "2" ]; then
+            SIDE_VAL=1
+            SIDE_STR="Sell"
+            MAKER_CURRENCY="Token (YES/NO)"
+            TAKER_CURRENCY="USDC"
+        else
+            SIDE_VAL=0
+            SIDE_STR="Buy"
+            MAKER_CURRENCY="USDC"
+            TAKER_CURRENCY="Token (YES/NO)"
+        fi
+
+        # === Step B: 選擇標的 (Asset) ===
+        echo "--------------------------------"
+        echo "請選擇標的物:"
+        echo "1) YES"
+        echo "2) NO"
+        read -p "選項 (預設 1): " TOKEN_OPT
+
+        if [ "$TOKEN_OPT" == "2" ]; then
+            TOKEN_VAL=0
+            TOKEN_STR="NO"
+        else
+            TOKEN_VAL=1
+            TOKEN_STR="YES"
+        fi
+
+        # 更新顯示幣種名稱
+        if [ "$MAKER_CURRENCY" != "USDC" ]; then MAKER_CURRENCY=$TOKEN_STR; fi
+        if [ "$TAKER_CURRENCY" != "USDC" ]; then TAKER_CURRENCY=$TOKEN_STR; fi
+
+        echo "--------------------------------"
+        echo -e "即將建立訂單: ${GREEN}${SIDE_STR} ${TOKEN_STR}${NC}"
+        echo "--------------------------------"
+
+        # === Step C: 輸入金額 ===
+        read -p "Maker Amount (您願意付出 $MAKER_CURRENCY 的數量): " M_Input
+        read -p "Taker Amount (您想要獲得 $TAKER_CURRENCY 的數量): " T_Input
+        
+        # 檢查輸入
+        if [ -z "$M_Input" ] || [ -z "$T_Input" ]; then
+            echo -e "${RED}❌ 金額不能為空${NC}"
+            exit 1
+        fi
+
         # 轉換單位 (x 10^9)
         M_AMT="${M_Input}000000000"
         T_AMT="${T_Input}000000000"
@@ -144,29 +193,29 @@ case $OPTION in
         SALT=$RANDOM
         
         echo "--------------------------------"
-        echo "Maker (付出): $M_Input USDC"
-        echo "Taker (獲得): $T_Input YES"
-        echo "Salt: $SALT"
+        echo "Maker Info:"
+        echo "  Action : $SIDE_STR $TOKEN_STR"
+        echo "  Pay    : $M_Input $MAKER_CURRENCY"
+        echo "  Get    : $T_Input $TAKER_CURRENCY"
+        echo "  Salt   : $SALT"
         echo "--------------------------------"
         
         echo -e "${YELLOW}正在發送 PTB 交易...${NC}"
 
         # ==================================================================
-        # PTB 指令解釋：
-        # 1. --move-call ...create_order : 執行創建訂單函數
-        #    參數: @Maker @M_Amt @T_Amt Role(0=Buy) Token(1=YES) Exp(0) Salt
-        # 2. --assign order_obj : 將上一步的結果(Order Struct)存入變數 order_obj
-        # 3. --move-call ...post_order : 將訂單提交到市場
-        #    參數: @MarketID order_obj
+        # PTB 指令鏈:
+        # create_order(maker, m_amt, t_amt, role, token, exp, salt)
+        # role:  使用變數 $SIDE_VAL (0 or 1)
+        # token: 使用變數 $TOKEN_VAL (1 or 0)
         # ==================================================================
         
-        RAW_RES=$(sui client ptb \
+        PTB_RES=$(sui client ptb \
             --move-call $PACKAGE_ID::market::create_order \
                 @$SENDER \
-                $M_AMT \
-                $T_AMT \
-                0u8 \
-                1u8 \
+                ${M_AMT}u64 \
+                ${T_AMT}u64 \
+                ${SIDE_VAL}u8 \
+                ${TOKEN_VAL}u8 \
                 0u64 \
                 ${SALT}u64 \
             --assign order_obj \
@@ -176,8 +225,8 @@ case $OPTION in
             --gas-budget 100000000 \
             --json 2>&1)
 
-        # 清洗輸出
-        CLEAN_RES=$(echo "$RAW_RES" | grep -v "^\[warning\]")
+        # 清洗並檢查 (過濾 warning 避免 jq 解析錯誤)
+        CLEAN_RES=$(echo "$PTB_RES" | grep -v "^\[warning\]")
         STATUS=$(echo "$CLEAN_RES" | jq -r '.effects.status.status' 2>/dev/null)
 
         if [[ "$STATUS" == "success" ]]; then
@@ -198,32 +247,21 @@ case $OPTION in
         fi
         ;;
     4)
-        echo -e "${GREEN}查詢 Order Book (Direct Scan Mode)...${NC}"
-        echo -e "${YELLOW}正在直接讀取鏈上訂單物件 (無需 BCS 解碼)...${NC}"
+        echo -e "${GREEN}查詢 Order Book (Direct Scan - Full View)...${NC}"
         
-        # 定義清洗函數 (移除顏色代碼和警告)
         clean_output() {
             sed 's/\x1b\[[0-9;]*m//g' | grep -v "warning" | grep -v "Client/Server"
         }
 
-        # 1. 獲取 Market 的 active_orders Table ID
-        # ---------------------------------------------------
         RAW_MARKET=$(sui client object $MARKET_ID --json 2>&1 | clean_output)
-        
-        # 使用遞迴搜尋確保能抓到 active_orders
         ACTIVE_ORDERS_DATA=$(echo "$RAW_MARKET" | jq -r '.. | .active_orders? | select(. != null)')
         TABLE_ID=$(echo "$ACTIVE_ORDERS_DATA" | jq -r '.fields.id.id // empty')
         
         if [ -z "$TABLE_ID" ]; then
-            echo -e "${RED}❌ 無法讀取 active_orders Table ID。${NC}"
+            echo -e "${RED}❌ 無法讀取 Table ID。${NC}"
         else
             echo "Table ID: $TABLE_ID"
-            
-            # 2. 抓取 Table 中所有 Dynamic Field 的 ID
-            # ---------------------------------------------------
             DF_RES=$(sui client dynamic-field $TABLE_ID --json 2>&1 | clean_output)
-            
-            # 檢查是否有資料
             DF_COUNT=$(echo "$DF_RES" | jq -r '.data | length' 2>/dev/null)
             
             if [ -z "$DF_COUNT" ] || [ "$DF_COUNT" == "0" ]; then
@@ -233,83 +271,82 @@ case $OPTION in
                 
                 FIELD_IDS=$(echo "$DF_RES" | jq -r '.data[].objectId')
                 
-                # 初始化分類字串
+                # 初始化 4 個方向的字串與計數
                 STR_BIDS_YES=""
                 STR_ASKS_NO=""
-                COUNT_BIDS=0
-                COUNT_ASKS=0
+                STR_BIDS_NO=""
+                STR_ASKS_YES=""
+                
+                COUNT_BIDS_YES=0
+                COUNT_ASKS_NO=0
+                COUNT_BIDS_NO=0
+                COUNT_ASKS_YES=0
 
-                # 3. 迴圈讀取每個訂單內容並分類
-                # ---------------------------------------------------
                 for fid in $FIELD_IDS; do
-                    # 讀取 Field Object
                     OBJ_DATA=$(sui client object $fid --json 2>&1 | clean_output)
-                    
-                    # 抓取深層的 Order 結構
-                    # 路徑: DynamicField -> Node -> Value(Order) -> Fields
                     ORDER_VAL=$(echo "$OBJ_DATA" | jq -r '.. | .value? | .fields? | .value? | .fields? | select(.maker != null)')
                     
                     if [ -z "$ORDER_VAL" ]; then continue; fi
                     
-                    # 提取欄位
                     MAKER=$(echo "$ORDER_VAL" | jq -r '.maker')
                     SIDE=$(echo "$ORDER_VAL" | jq -r '.maker_role')   # 0=Buy, 1=Sell
                     TOKEN=$(echo "$ORDER_VAL" | jq -r '.token_id')    # 1=YES, 0=NO
                     M_AMT=$(echo "$ORDER_VAL" | jq -r '.maker_amount')
                     T_AMT=$(echo "$ORDER_VAL" | jq -r '.taker_amount')
                     
-                    # === 數值顯示處理 (macOS Bash 相容寫法) ===
-                    # Maker Amount (USDC) -> 轉為整數顯示 (除以 10^9)
+                    # 數值顯示處理
                     M_Len=${#M_AMT}
-                    if [[ $M_Len -gt 9 ]]; then
-                        M_Show="${M_AMT:0:$((M_Len-9))}"
-                    else
-                        M_Show="0.${M_AMT}"
-                    fi
-
-                    # Taker Amount (YES/NO) -> 轉為整數顯示
+                    if [[ $M_Len -gt 9 ]]; then M_Show="${M_AMT:0:$((M_Len-9))}"; else M_Show="0.${M_AMT}"; fi
+                    
                     T_Len=${#T_AMT}
-                    if [[ $T_Len -gt 9 ]]; then
-                        T_Show="${T_AMT:0:$((T_Len-9))}"
-                    else
-                        T_Show="0.${T_AMT}"
-                    fi
+                    if [[ $T_Len -gt 9 ]]; then T_Show="${T_AMT:0:$((T_Len-9))}"; else T_Show="0.${T_AMT}"; fi
 
-                    # 格式化單行輸出
                     LINE="Maker: ${MAKER:0:6}... | Pay: ${M_Show} USDC -> Get: ${T_Show}"
 
-                    # === 分類邏輯 ===
-                    # 1. Bids YES (買 YES): Side=0 (Buy) AND Token=1 (YES)
+                    # === 分類邏輯 (4 Directions) ===
+                    
+                    # 1. Buy YES (Side=0, Token=1)
                     if [[ "$SIDE" == "0" && "$TOKEN" == "1" ]]; then
                         STR_BIDS_YES="${STR_BIDS_YES}${LINE} YES\n"
-                        COUNT_BIDS=$((COUNT_BIDS+1))
+                        COUNT_BIDS_YES=$((COUNT_BIDS_YES+1))
                     
-                    # 2. Asks NO (賣 NO): Side=1 (Sell) AND Token=0 (NO)
+                    # 2. Buy NO (Side=0, Token=0) -> 這就是消失的那張！
+                    elif [[ "$SIDE" == "0" && "$TOKEN" == "0" ]]; then
+                        STR_BIDS_NO="${STR_BIDS_NO}${LINE} NO\n"
+                        COUNT_BIDS_NO=$((COUNT_BIDS_NO+1))
+
+                    # 3. Sell NO (Side=1, Token=0)
                     elif [[ "$SIDE" == "1" && "$TOKEN" == "0" ]]; then
                         STR_ASKS_NO="${STR_ASKS_NO}${LINE} USDC (Sell NO)\n"
-                        COUNT_ASKS=$((COUNT_ASKS+1))
+                        COUNT_ASKS_NO=$((COUNT_ASKS_NO+1))
+
+                    # 4. Sell YES (Side=1, Token=1)
+                    elif [[ "$SIDE" == "1" && "$TOKEN" == "1" ]]; then
+                        STR_ASKS_YES="${STR_ASKS_YES}${LINE} USDC (Sell YES)\n"
+                        COUNT_ASKS_YES=$((COUNT_ASKS_YES+1))
                     fi
                 done
                 
-                # 4. 顯示最終結果
-                # ---------------------------------------------------
+                # === 顯示結果 ===
                 echo "========================================"
-                echo -e "${GREEN}Bids for YES (買入 YES)${NC}"
+                echo -e "${GREEN}Bids for YES (做多: 買入 YES)${NC}"
                 echo "----------------------------------------"
-                if [ "$COUNT_BIDS" -eq 0 ]; then
-                    echo "無"
-                else
-                    echo -e "$STR_BIDS_YES"
-                fi
+                [ "$COUNT_BIDS_YES" -eq 0 ] && echo "無" || echo -e "$STR_BIDS_YES"
                 
                 echo "========================================"
-                echo -e "${RED}Asks for NO (賣出 NO)${NC}"
+                echo -e "${BLUE}Bids for NO  (做空: 買入 NO)${NC}"
                 echo "----------------------------------------"
-                if [ "$COUNT_ASKS" -eq 0 ]; then
-                    echo "無"
-                else
-                    echo -e "$STR_ASKS_NO"
-                fi
+                [ "$COUNT_BIDS_NO" -eq 0 ] && echo "無" || echo -e "$STR_BIDS_NO"
+
+                echo "========================================"
+                echo -e "${RED}Asks for NO  (平倉/做多: 賣出 NO)${NC}"
+                echo "----------------------------------------"
+                [ "$COUNT_ASKS_NO" -eq 0 ] && echo "無" || echo -e "$STR_ASKS_NO"
+
+                echo "========================================"
+                echo -e "${YELLOW}Asks for YES (平倉/做空: 賣出 YES)${NC}"
+                echo "----------------------------------------"
+                [ "$COUNT_ASKS_YES" -eq 0 ] && echo "無" || echo -e "$STR_ASKS_YES"
                 echo "========================================"
             fi
         fi
@@ -371,10 +408,20 @@ case $OPTION in
             fi
         }
 
-        # 1. Bids YES (買 YES)
-        query_ptb_stdlib "get_bids" "1" "Bids for YES (買入 YES)"
+        # ==========================================
+        # 執行 4 個方向的掃描
+        # ==========================================
 
-        # 2. Asks NO (賣 NO)
+        # 1. 買 YES (做多)
+        query_ptb_stdlib "get_bids" "1" "Bids for YES (買入 YES - 做多)"
+
+        # 2. 賣 YES (平倉/做空)
+        query_ptb_stdlib "get_asks" "1" "Asks for YES (賣出 YES)"
+
+        # 3. 買 NO (做空)
+        query_ptb_stdlib "get_bids" "0" "Bids for NO  (買入 NO  - 做空)"
+
+        # 4. 賣 NO (平倉/做多)
         query_ptb_stdlib "get_asks" "0" "Asks for NO  (賣出 NO )"
         
         echo "--------------------------------------------------"
