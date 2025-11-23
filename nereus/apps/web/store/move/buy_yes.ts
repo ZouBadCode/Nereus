@@ -2,7 +2,6 @@
 import { Transaction } from "@mysten/sui/transactions";
 import { market as PACKAGE_ID } from "./package";
 
-const MODULE_NAME = "market";
 const PRICE_SCALE = 1_000_000_000n; // 1.0 = 10^9
 const ASSET_YES = 1;
 const SIDE_BUY = 0; // 0 = Buy Role
@@ -39,7 +38,7 @@ export function buyYesTx(
 
 
     tx.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_NAME}::deposit_usdc`,
+        target: `${PACKAGE_ID}::deposit_usdc`,
         arguments: [
             tx.object(marketId),
             depositCoin
@@ -55,11 +54,11 @@ export function buyYesTx(
 
     // --- 4. 建立並發布訂單 (Create & Post Order) ---
     tx.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_NAME}::post_order`,
+        target: `${PACKAGE_ID}::post_order`,
         arguments: [
             tx.object(marketId),
             tx.moveCall({
-                target: `${PACKAGE_ID}::${MODULE_NAME}::create_order`,
+                target: `${PACKAGE_ID}::create_order`,
                 arguments: [
                     tx.pure.address(userAddress),  // maker
                     tx.pure.u64(usdcAmount),       // maker_amount (USDC)

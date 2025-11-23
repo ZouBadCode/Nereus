@@ -32,7 +32,7 @@ export function buyNoTx(
 
     // 2. Deposit USDC
     tx.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_NAME}::deposit_usdc`,
+        target: `${PACKAGE_ID}::deposit_usdc`,
         arguments: [tx.object(marketId), depositCoin]
     });
 
@@ -45,11 +45,11 @@ export function buyNoTx(
 
     // 4. 建立並發布訂單 (Create & Post Order)
     tx.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_NAME}::post_order`,
+        target: `${PACKAGE_ID}::post_order`,
         arguments: [
             tx.object(marketId),
             tx.moveCall({
-                target: `${PACKAGE_ID}::${MODULE_NAME}::create_order`,
+                target: `${PACKAGE_ID}::create_order`,
                 arguments: [
                     tx.pure.address(userAddress),
                     tx.pure.u64(usdcAmount),
