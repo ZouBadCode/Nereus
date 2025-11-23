@@ -97,6 +97,23 @@ fun deposit_to_vault(scenario: &mut Scenario, user: address, amount: u64) {
     };
 }
 
+/// 輔助：印出單一用戶的所有餘額
+fun print_user_balances(market: &Market, user: address, label: vector<u8>) {
+    let (yes_bal, no_bal, usdc_bal) = market::get_all_balances(market, user);
+
+    // 印出標題 (例如 "=== ALICE Balances ===")
+    debug::print(&std::string::utf8(label));
+
+    debug::print(&std::string::utf8(b"YES Asset:"));
+    debug::print(&yes_bal);
+
+    debug::print(&std::string::utf8(b"NO  Asset:"));
+    debug::print(&no_bal);
+
+    debug::print(&std::string::utf8(b"USDC Coin:"));
+    debug::print(&usdc_bal);
+}
+
 // =========================================================================
 // Test Case: Mint/Merge Complete Set (No Trading)
 // =========================================================================
@@ -918,7 +935,6 @@ fun test_get_bids_asks_paged_test_2() {
 #[test]
 fun test_get_bids_asks_paged_test_3() {
     let mut scenario = ts::begin(ADMIN);
-    // 1. 這裡已經建立了 clock
     let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
     init_test_environment(&mut scenario);
@@ -952,7 +968,7 @@ fun test_get_bids_asks_paged_test_3() {
         ts::return_shared(market);
     };
 
-    // === 驗證 Step 1 ===
+    // 驗證鑄造結果
     ts::next_tx(&mut scenario, ALICE);
     {
         let mut market = ts::take_shared<Market>(&scenario);
@@ -980,7 +996,7 @@ fun test_get_bids_asks_paged_test_3() {
         ts::return_shared(market);
     };
 
-    // === Step 2: Alice 掛買單 (這裡需要傳入 &clock) ===
+    // === Step 2: Alice & Bob 掛買單 (這裡需要傳入 &clock) ===
     ts::next_tx(&mut scenario, ALICE);
     {
         let mut market = ts::take_shared<Market>(&scenario);
@@ -1016,7 +1032,19 @@ fun test_get_bids_asks_paged_test_3() {
         ts::return_shared(market);
     };
 
-    // === Step 3: 測試分頁讀取 ===
+    // === Step 3: 驗證 Alice (Maker) & Bob (Taker 1) 的狀態 ===
+    ts::next_tx(&mut scenario, BOB);
+    {
+        let mut market = ts::take_shared<Market>(&scenario);
+
+        // Balance 檢查
+        print_user_balances(&market, ALICE, b"=== ALICE Balances ===");
+        print_user_balances(&market, BOB, b"=== BOB Balances ===");
+
+        ts::return_shared(market);
+    };
+
+    // === Step 4: 測試分頁讀取 ===
     ts::next_tx(&mut scenario, ADMIN);
     {
         let market = ts::take_shared<Market>(&scenario);
@@ -1059,7 +1087,7 @@ fun test_get_bids_asks_paged_test_3() {
         debug::print(&std::string::utf8(b"Bids Page 1 count (Should be 3/5):"));
         debug::print(&vector::length(&asks_page1));
         debug::print(&asks_page1);
-        assert!(vector::length(&asks_page1) == 3, 104);
+        assert!(vector::length(&asks_page1) == 0, 104);
 
         ts::return_shared(market);
     };

@@ -36,8 +36,9 @@ echo "2. 存入 USDC 到 Market (Deposit)"
 echo "3. 掛買單 (Place Order - Buy YES)"
 echo "4. 查看 Market 狀態"
 echo "5. 查詢買賣單 (Bids YES / Asks NO)"
+echo "6. 查詢 Market Vault 餘額 (My Position)"
 echo "-------------------------------------"
-read -p "輸入選項 (1-5): " OPTION     
+read -p "輸入選項 (1-6): " OPTION     
 
 case $OPTION in
     1)
@@ -428,6 +429,82 @@ case $OPTION in
         echo "--------------------------------------------------"
         ;;
 
+    6)
+        echo -e "${GREEN}查詢 Market Vault 內部餘額 (Internal Balance)...${NC}"
+        
+        SENDER=$(sui client active-address)
+        echo "User: $SENDER"
+        echo -e "${YELLOW}正在讀取合約狀態 (Dev Inspect)...${NC}"
+        
+        # 1. 執行 PTB (注意: 恢復使用 @$SENDER)
+        # 我們同時保留 stdout 和 stderr，以便後續分析
+        RAW_OUTPUT=$(sui client ptb \
+            --move-call $PACKAGE_ID::market::get_all_balances @$MARKET_ID @$SENDER \
+            --dev-inspect \
+            --json 2>&1)
+            
+        # 2. 定義一個 Node.js 輔助函數來解析 Little Endian Bytes
+        # 這是最穩定的方法，因為 CLI 輸出的 "Bytes: [...]" 格式通常不會變
+        parse_bytes_with_node() {
+            local bytes_str="$1"
+            node -e "
+                try {
+                    const arr = $bytes_str;
+                    const buf = Buffer.from(arr);
+                    // 讀取 64-bit Little Endian Unsigned Integer
+                    const val = buf.readBigUInt64LE(0);
+                    // 轉成人類可讀格式 (除以 10^9)
+                    const human = Number(val) / 1000000000;
+                    console.log(human.toFixed(2));
+                } catch (e) {
+                    console.log('0');
+                }
+            "
+        }
+
+        # 3. 嘗試提取 Bytes 資料
+        # 輸出格式通常包含多行 "Bytes: [x, x, x...]"
+        # 我們將它們存入陣列
+        
+        # 使用 grep 提取所有 Bytes 行
+        BYTES_LINES=$(echo "$RAW_OUTPUT" | grep "Bytes: \[")
+        
+        # 檢查是否找到數據
+        if [ -z "$BYTES_LINES" ]; then
+            echo -e "${RED}❌ 查詢失敗！無法找到回傳數據。${NC}"
+            echo "原始輸出片段:"
+            echo "$RAW_OUTPUT" | head -n 20
+        else
+            # 將 grep 結果轉為陣列 (以換行符分隔)
+            IFS=$'\n' read -rd '' -a LINES_ARY <<< "$BYTES_LINES"
+            
+            # 根據 Move 函數回傳順序: (YES, NO, USDC)
+            # 通常順序是固定的
+            LINE_YES="${LINES_ARY[0]}"
+            LINE_NO="${LINES_ARY[1]}"
+            LINE_USDC="${LINES_ARY[2]}"
+            
+            # 清洗字串，只保留 [ ... ] 部分
+            # 例如 "   Bytes: [0, 0...]" -> "[0, 0...]"
+            JSON_YES=$(echo "$LINE_YES" | sed 's/.*Bytes: //')
+            JSON_NO=$(echo "$LINE_NO" | sed 's/.*Bytes: //')
+            JSON_USDC=$(echo "$LINE_USDC" | sed 's/.*Bytes: //')
+            
+            # 呼叫 Node 解析
+            VAL_YES=$(parse_bytes_with_node "$JSON_YES")
+            VAL_NO=$(parse_bytes_with_node "$JSON_NO")
+            VAL_USDC=$(parse_bytes_with_node "$JSON_USDC")
+
+            echo "----------------------------------------"
+            echo -e "Market Vault 存款 (Internal):"
+            echo "----------------------------------------"
+            echo -e "🟢 YES  Token : $VAL_YES"
+            echo -e "🔴 NO   Token : $VAL_NO"
+            echo -e "💰 USDC Coin  : $VAL_USDC"
+            echo "----------------------------------------"
+        fi
+        ;;
+        
     *)
         echo "無效選項"
         ;;

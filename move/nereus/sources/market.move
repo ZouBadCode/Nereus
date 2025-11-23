@@ -158,7 +158,7 @@ public fun create_market(
     transfer::share_object(market);
 }
 
-/// === Internal Helpers (Moved UP to fix scoping issues) ===
+/// === Internal Helpers ===
 
 fun check_balance(market: &Market, user: address, asset_type: u8, amount: u64) {
     let table_ref = if (asset_type == ASSET_YES) { &market.vault_yes } else if (
@@ -210,17 +210,35 @@ fun get_order_remaining(market: &Market, hash: vector<u8>): u64 {
     }
 }
 
-/// === 關鍵修正：加上 * 進行解引用 ===
 fun get_order_and_next(market: &Market, hash: vector<u8>): (Option<vector<u8>>, Order) {
     (
-        *linked_table::next(&market.active_orders, hash), // 這裡加上 *
+        *linked_table::next(&market.active_orders, hash),
         *linked_table::borrow(&market.active_orders, hash),
     )
 }
 
-/// === 關鍵修正：加上 * 進行解引用 ===
 fun get_front_order_hash(market: &Market): Option<vector<u8>> {
-    *linked_table::front(&market.active_orders) // 這裡加上 *
+    *linked_table::front(&market.active_orders)
+}
+
+/// === View Functions (新增功能) ===
+
+/// 讀取使用者在 Market 內部的資產餘額
+/// asset_type: 0 (NO), 1 (YES), 2 (USDC)
+public fun get_all_balances(market: &Market, user: address): (u64, u64, u64) {
+    let yes_bal = if (table::contains(&market.vault_yes, user)) {
+        *table::borrow(&market.vault_yes, user)
+    } else { 0 };
+
+    let no_bal = if (table::contains(&market.vault_no, user)) {
+        *table::borrow(&market.vault_no, user)
+    } else { 0 };
+
+    let usdc_bal = if (table::contains(&market.vault_usdc, user)) {
+        *table::borrow(&market.vault_usdc, user)
+    } else { 0 };
+
+    (yes_bal, no_bal, usdc_bal)
 }
 
 /// === Basic Operations ===
@@ -323,6 +341,9 @@ public fun post_order(market: &mut Market, mut order: Order, clock: &Clock, ctx:
     let sender = tx_context::sender(ctx);
     assert!(order.maker == sender, ENotOwner);
 
+    assert!(order.taker_amount > 0, EInvalidPrice);
+    assert!(order.maker_amount > 0, EInsufficientBalance);
+
     // 1. 檢查餘額
     if (order.maker_role == SIDE_BUY) {
         check_balance(market, sender, ASSET_USDC, order.maker_amount);
@@ -339,6 +360,19 @@ public fun post_order(market: &mut Market, mut order: Order, clock: &Clock, ctx:
     if (order.maker_amount > 0) {
         let order_hash = hash_order(&order);
         if (!linked_table::contains(&market.active_orders, order_hash)) {
+            // === [修復重點] 初始化 OrderStatus ===
+            // 必須在這裡初始化，否則後續撮合讀取時 remaining 會是 0
+            if (!table::contains(&market.order_statuses, order_hash)) {
+                table::add(
+                    &mut market.order_statuses,
+                    order_hash,
+                    OrderStatus {
+                        remaining: order.maker_amount,
+                        is_cancelled: false,
+                    },
+                );
+            };
+
             linked_table::push_back(&mut market.active_orders, order_hash, order);
             event::emit(OrderPosted {
                 order_hash,
@@ -358,25 +392,29 @@ fun try_match_existing_orders(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // 使用 helper 函數避免直接借用
     let mut current_opt = get_front_order_hash(market);
     let mut loop_limit = 50;
 
     while (option::is_some(&current_opt) && taker_order.maker_amount > 0 && loop_limit > 0) {
         let maker_hash = *option::borrow(&current_opt);
 
-        // === 使用 helper 函數取得資料並結束借用 ===
         let (next_cursor, maker_order) = get_order_and_next(market, maker_hash);
 
-        // 判斷是否可撮合
+        // === [新增] 防呆保護：如果是壞訂單(分母為0)，直接跳過 ===
+        if (maker_order.taker_amount == 0 || maker_order.maker_amount == 0) {
+            current_opt = next_cursor;
+            loop_limit = loop_limit - 1;
+            continue
+        };
+        // ====================================================
+
         if (can_match(taker_order, &maker_order)) {
             let maker_remaining = get_order_remaining(market, maker_hash);
 
-            // 計算需要吃掉的 Maker 數量
             let required_maker_amount =
                 (taker_order.maker_amount as u128) 
-                    * (maker_order.maker_amount as u128) 
-                    / (maker_order.taker_amount as u128);
+                        * (maker_order.maker_amount as u128) 
+                        / (maker_order.taker_amount as u128);
 
             let mut fill_amount_making = maker_remaining;
             if ((required_maker_amount as u64) < maker_remaining) {
@@ -386,10 +424,9 @@ fun try_match_existing_orders(
             if (fill_amount_making > 0) {
                 let fill_amount_taking =
                     (fill_amount_making as u128) 
-                        * (maker_order.taker_amount as u128) 
-                        / (maker_order.maker_amount as u128);
+                            * (maker_order.taker_amount as u128) 
+                            / (maker_order.maker_amount as u128);
 
-                // 執行 Match
                 match_orders(
                     market,
                     *taker_order,
@@ -399,7 +436,6 @@ fun try_match_existing_orders(
                     ctx,
                 );
 
-                // 更新 Taker 剩餘量
                 taker_order.maker_amount = taker_order.maker_amount - (fill_amount_taking as u64);
                 taker_order.taker_amount = taker_order.taker_amount - fill_amount_making;
             };
@@ -411,33 +447,21 @@ fun try_match_existing_orders(
 }
 
 fun can_match(taker: &Order, maker: &Order): bool {
-    // 1. 自我撮合檢查
     if (taker.maker == maker.maker) return false;
 
-    // 2. 預先過濾無效配對 (避免觸發 derive_match_type 的 abort)
-
-    // 情況 A: 角色相同 (預期是 Mint/Merge)，但 Token 也相同 (例如 Buy YES vs Buy YES)
-    // -> 這是同邊訂單，不能撮合
     if (taker.maker_role == maker.maker_role && taker.token_id == maker.token_id) {
         return false
     };
 
-    // 情況 B: 角色不同 (預期是 Complementary)，但 Token 不同 (例如 Buy YES vs Sell NO)
-    // -> 這無法撮合
     if (taker.maker_role != maker.maker_role && taker.token_id != maker.token_id) {
         return false
     };
 
-    // --- 到了這裡，代表配對組合在邏輯上是合法的 (Mint, Merge, 或 Trade) ---
-    // 現在可以安全呼叫 derive_match_type
     let match_type = derive_match_type(taker, maker);
-
     let maker_p = calculate_price(maker);
     let taker_p = calculate_price(taker);
 
     if (match_type == MATCH_COMPLEMENTARY) {
-        // 一般撮合 (Token 相同，一買一賣)
-        // 這裡不需要額外檢查，因為 derive_match_type 已經確認過了
         return true
     } else if (match_type == MATCH_MINT) {
         return (maker_p + taker_p >= PRICE_SCALE)

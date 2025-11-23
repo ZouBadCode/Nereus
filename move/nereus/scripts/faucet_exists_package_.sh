@@ -27,8 +27,8 @@ echo -e "${BLUE}=== 開始部署 Nereus 到 Sui Testnet ===${NC}"
 ACTIVE_ADDR=$(sui client active-address)
 echo "當前地址: $ACTIVE_ADDR"
 
-# 設定 budget 1 SUI 
-GAS_BUDGET=1000000000
+# 設定 budget 0.5 SUI 
+GAS_BUDGET=500000000
 
 # 讀取 .env (確保有 PACKAGE_ID)
 if [ -f .env ]; then
