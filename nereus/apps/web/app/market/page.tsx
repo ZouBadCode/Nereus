@@ -45,7 +45,7 @@ export default function MarketPage() {
 	const { handleBuyNo } = useBuyNo()
 	const searchParams = useSearchParams();
 	const marketId = searchParams.get("id");
-	const { marketList, queryMarkets,fetchUser,user } = storeStore();
+	const { marketList, queryMarkets, fetchUser, user } = storeStore();
 	React.useEffect(() => {
 		queryMarkets();
 	}, [queryMarkets]);
@@ -123,22 +123,22 @@ export default function MarketPage() {
 	}
 	// 計算區塊
 	const currentFee =
-	selectedSide === "YES"
-	? typeof yesFee === "number"
-	? yesFee
-	: 0
-	: selectedSide === "NO"
-	? typeof noFee === "number"
-	? noFee
-	: 0
-	: 0;
+		selectedSide === "YES"
+			? typeof yesFee === "number"
+				? yesFee
+				: 0
+			: selectedSide === "NO"
+				? typeof noFee === "number"
+					? noFee
+					: 0
+				: 0;
 	const parsedAmount = parseFloat(amount);
 	const isValidAmount = !isNaN(parsedAmount) && parsedAmount > 0;
 	const currentTotal =
-	currentFee && isValidAmount
-	? (currentFee * parsedAmount).toFixed(4)
-	: "0.0000";
-	
+		currentFee && isValidAmount
+			? (currentFee * parsedAmount).toFixed(4)
+			: "0.0000";
+
 	return (
 		<div className="max-w-6xl mx-auto px-4 py-8">
 			<Navbar />
@@ -234,24 +234,54 @@ export default function MarketPage() {
 					<div className="border-t pt-6 flex flex-col gap-4">
 						{!isEnded && (
 							<>
-								<div
-									className={`rounded-xl border-2 p-4 text-center transition-all duration-300 relative overflow-hidden min-h-[100px] flex flex-col justify-center items-center shadow-inner mb-4
-										${!selectedSide ? "bg-muted/20 border-dashed border-muted-foreground/20 text-muted-foreground" : ""}
-										${selectedSide === "YES" ? "bg-emerald-50/80 border-emerald-500/30 text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-100" : ""}
-										${selectedSide === "NO" ? "bg-rose-50/80 border-rose-500/30 text-rose-900 dark:bg-rose-950/20 dark:text-rose-100" : ""}
-									`}
+								{/* 先讓使用者選 YES / NO */}
+								<div className="flex gap-2 mb-2">
+									<FlipBuyButton
+										side="YES"
+										price={typeof yesFee === "number" ? yesFee : 0}
+										amount={amount}
+										setAmount={setAmount}
+										selectedSide={selectedSide}
+										setSelectedSide={setSelectedSide}
+										onConfirm={() => {
+											handleBuyYes(market, BigInt(amount));
+											setAmount("");
+											setSelectedSide(null);
+										}}
+										className="flex-1 h-12"
+										disabled={isEnded}
+									/>
+									<FlipBuyButton
+										side="NO"
+										price={typeof noFee === "number" ? noFee : 0}
+										amount={amount}
+										setAmount={setAmount}
+										selectedSide={selectedSide}
+										setSelectedSide={setSelectedSide}
+										onConfirm={() => {
+											handleBuyNo(market, BigInt(amount));
+											setAmount("");
+											setSelectedSide(null);
+										}}
+										className="flex-1 h-12"
+										disabled={isEnded}
+									/>
+								</div>
+
+								{/* 只有在點了 YES / NO 之後才出現 Estimate Cost 區塊 */}
+								{selectedSide && (
+									<div
+										className={`
+            mt-2 rounded-xl border-2 p-4 text-center relative overflow-hidden
+            min-h-[100px] flex flex-col justify-center items-center shadow-inner
+            animate-in slide-in-from-bottom-2 fade-in duration-300
+            ${selectedSide === "YES"
+												? "bg-emerald-50/80 border-emerald-500/30 text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-100"
+												: "bg-rose-50/80 border-rose-500/30 text-rose-900 dark:bg-rose-950/20 dark:text-rose-100"
+											}
+          `}
 									>
-									{!selectedSide ? (
-										<div className="flex flex-col items-center gap-1 animate-in fade-in duration-300">
-											<span className="text-sm font-medium">
-												Estimate Cost
-											</span>
-											<span className="text-xs opacity-70">
-												Select YES or NO to calculate
-											</span>
-										</div>
-									) : (
-										<div className="w-full animate-in slide-in-from-bottom-2 fade-in duration-200">
+										<div className="w-full">
 											<div className="flex items-center justify-center gap-2 mb-1 opacity-70">
 												<span className="text-[10px] uppercase tracking-wider font-bold">
 													Estimated Cost ({selectedSide})
@@ -269,66 +299,34 @@ export default function MarketPage() {
 												<span>{isValidAmount ? parsedAmount : 0}</span>
 											</div>
 										</div>
-									)}
-								</div>
-
-								<div className="flex gap-2 mb-2">
-									<FlipBuyButton
-										side="YES"
-										price={typeof yesFee === "number" ? yesFee : 0}
-										amount={amount}
-										setAmount={setAmount}
-										selectedSide={selectedSide}
-										setSelectedSide={setSelectedSide}
-										onConfirm={() => {
-											handleBuyYes(market, BigInt(amount));
-											setAmount("");
-											setSelectedSide(null);
-										}}
-										className="flex-1 h-12"
-										disabled={isEnded}
-										/>
-									<FlipBuyButton
-										side="NO"
-										price={typeof noFee === "number" ? noFee : 0}
-										amount={amount}
-										setAmount={setAmount}
-										selectedSide={selectedSide}
-										setSelectedSide={setSelectedSide}
-										onConfirm={() => {
-											handleBuyNo(market, BigInt(amount));
-											setAmount("");
-											setSelectedSide(null);
-										}}
-										className="flex-1 h-12"
-										disabled={isEnded}
-										/>
-								</div>
+									</div>
+								)}
 							</>
 						)}
+
 						<Button
 							className="mt-4 w-full"
 							onClick={handleAddLiquidity}
 							variant="default"
-							>
+						>
 							Add Liquidity
-						</Button>						
+						</Button>
 						<Button
-							className="mt-4 w-full"
+							className="mt-2 w-full"
 							onClick={handleResolve}
 							variant="default"
-							>
+						>
 							Resolve
 						</Button>
 					</div>
 				</div>
 
 				{/* 右側：對應這個 market 的聊天室 */}
-				{market!=undefined &&(<div className="h-full flex flex-col gap-4">
+				{market != undefined && (<div className="h-full flex flex-col gap-4">
 					<MarketChatRoom marketId={market.address} />
 					<BuyerRankTabs
 						marketAddress={market.address}
-						/>
+					/>
 				</div>)}
 			</div>
 		</div>
