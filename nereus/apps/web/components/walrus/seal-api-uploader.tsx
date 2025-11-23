@@ -124,8 +124,8 @@ export function SealApiKeyUploader(props: SealApiKeyUploaderProps) {
 
         const { encryptedObject } = await sealClient.encrypt({
           threshold,
-          packageId: fromHex(packageId),
-          id: fromHex(policyId),
+          packageId: packageId,
+          id: policyId,
           data,
         });
 
