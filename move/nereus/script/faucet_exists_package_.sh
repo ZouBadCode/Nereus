@@ -41,39 +41,97 @@ fi
 echo "Package: $PACKAGE_ID"
 
 # ==========================================
-# 4. 處理 USDC (模擬)
+# 4. 處理 USDC (模擬) - 使用 PTB 批量領水並合併
 # ==========================================
-# 嘗試從之前的發布結果或 .env 獲取 TreasuryCap，如果沒有則跳過
 if [ -z "$USDC_TREASURY_ID" ]; then
-    # 嘗試從環境變數讀取，如果沒有則提示
-    echo "⚠️ 未檢測到 USDC_TREASURY_ID，跳過鑄造測試幣。"
+    echo "⚠️ 未檢測到 USDC_TREASURY_ID (或 Manager ID)，跳過鑄造。"
 else
-    echo "USDC Treasury ID: $USDC_TREASURY_ID"
-    echo -e "${GREEN}鑄造 1000 USDC 給自己...${NC}"
+    echo "Manager/Treasury ID: $USDC_TREASURY_ID"
     
-    # 修改處：將輸出存入變數 MINT_RES，並過濾掉警告訊息 (stderr)
-    MINT_RES=$(sui client call \
-        --package $PACKAGE_ID \
-        --module usdc \
-        --function faucet \
-        --args $USDC_TREASURY_ID \
-        --gas-budget $GAS_BUDGET \
-        --json 2> /dev/null)
+    # === 修改：詢問要領取幾次 ===
+    read -p "請問要執行幾次 Faucet? (預設 1 次, 輸入 0 跳過): " INPUT_TIMES
 
-    # 檢查交易狀態
-    if [[ $(echo "$MINT_RES" | jq -r '.effects.status.status') == "success" ]]; then
-        DIGEST=$(echo "$MINT_RES" | jq -r '.digest')
-        # 嘗試抓取新生成的 Coin Object ID (如果是 mint，通常會有 created 或 mutated)
-        NEW_COIN=$(echo "$MINT_RES" | jq -r '.objectChanges[] | select(.type == "created" and (.objectType | contains("::usdc::USDC"))) | .objectId' | head -n 1)
-        
-        echo -e "${GREEN}✅ 鑄造成功！${NC}"
-        echo "交易 ID (Digest): $DIGEST"
-        if [ ! -z "$NEW_COIN" ]; then
-            echo "新鑄造的 USDC Object ID: $NEW_COIN"
-        fi
+    # 設定預設值邏輯
+    if [ -z "$INPUT_TIMES" ]; then
+        MINT_TIMES=1
     else
-        echo -e "${RED}❌ 鑄造失敗！詳細錯誤如下：${NC}"
-        # 如果失敗，印出完整 JSON 以便除錯
-        echo "$MINT_RES"
+        MINT_TIMES=$INPUT_TIMES
+    fi
+
+    # 如果輸入 0 或負數則跳過
+    if [ "$MINT_TIMES" -le 0 ]; then
+        echo "已跳過 Faucet 動作。"
+    else
+        echo -e "${GREEN}準備執行 PTB 批量領水 (共 $MINT_TIMES 次)...${NC}"
+
+        # 1. 建構 PTB 指令字串
+        # 我們動態產生多個 --move-call 參數
+        PTB_ARGS=""
+        for ((i=1; i<=MINT_TIMES; i++)); do
+            # 假設 faucet 函數簽名是 faucet(ctx, manager)
+            # 參數前面加 @ 代表是 Object ID
+            PTB_ARGS="$PTB_ARGS --move-call $PACKAGE_ID::usdc::faucet @$USDC_TREASURY_ID"
+        done
+
+        # 2. 執行 PTB 交易
+        PTB_RES=$(sui client ptb $PTB_ARGS --gas-budget $GAS_BUDGET --json 2> /dev/null)
+
+        if [[ $(echo "$PTB_RES" | jq -r '.effects.status.status') == "success" ]]; then
+            DIGEST=$(echo "$PTB_RES" | jq -r '.digest')
+            echo -e "${GREEN}✅ 批量領水成功！${NC} (交易 ID: $DIGEST)"
+        else
+            echo -e "${RED}❌ PTB 領水失敗！${NC}"
+            echo "$PTB_RES"
+            # 領水失敗不強制 exit，讓腳本繼續跑完後續流程
+        fi
+
+        # ==========================================
+        # 5. 自動合併 Coin (Merge Coins)
+        # ==========================================
+        # 只有當執行次數 > 1 才需要檢查合併
+        if [ "$MINT_TIMES" -gt 1 ]; then
+            echo -e "${BLUE}等待鏈上狀態更新 (3秒)...${NC}"
+            sleep 3 # 稍微等待，確保 indexer 抓得到新 Coin
+
+            echo -e "${BLUE}正在檢查並合併 USDC Coins...${NC}"
+
+            # 1. 抓取所有 USDC 的 Object ID
+            # 使用 sui client coins (比 balance 好解析)
+            COINS_JSON=$(sui client coins --coin-type $PACKAGE_ID::usdc::USDC --json 2> /dev/null)
+            
+            # 提取所有 ID 到陣列
+            COIN_IDS=($(echo "$COINS_JSON" | jq -r '.data[].coinObjectId'))
+            COIN_COUNT=${#COIN_IDS[@]}
+
+            echo "目前持有 $COIN_COUNT 顆 USDC Coin 物件。"
+
+            if [ "$COIN_COUNT" -gt 1 ]; then
+                # 第一顆當作主 Coin (Primary)
+                PRIMARY_COIN=${COIN_IDS[0]}
+                
+                # 剩下的當作要被合併的 Coin (Source)
+                # 陣列切片：從 index 1 開始到最後
+                SOURCE_COINS=${COIN_IDS[@]:1}
+                
+                echo "主 Coin: $PRIMARY_COIN"
+                echo -e "${GREEN}正在將其餘 $(($COIN_COUNT - 1)) 顆 Coin 合併...${NC}"
+
+                MERGE_RES=$(sui client merge-coin \
+                    --primary-coin $PRIMARY_COIN \
+                    --coin-to-merge $SOURCE_COINS \
+                    --gas-budget $GAS_BUDGET \
+                    --json 2> /dev/null)
+
+                if [[ $(echo "$MERGE_RES" | jq -r '.effects.status.status') == "success" ]]; then
+                     echo -e "${GREEN}✅ 合併完成！${NC} 所有資金已集中到 $PRIMARY_COIN"
+                else
+                     echo -e "${RED}❌ 合併失敗！${NC}"
+                     # 顯示部分錯誤訊息
+                     echo "$MERGE_RES" | jq -r '.effects.status.error // "Unknown Error"'
+                fi
+            else
+                echo "Coin 數量無需合併。"
+            fi
+        fi
     fi
 fi

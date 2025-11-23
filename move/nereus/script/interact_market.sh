@@ -57,20 +57,73 @@ case $OPTION in
         fi
         ;;
     2)
-        read -p "請輸入要存入的 USDC Coin Object ID: " COIN_ID
-        read -p "請輸入金額: " AMOUNT
+        read -p "請輸入來源 USDC Coin Object ID: " COIN_ID
+        read -p "請輸入金額 (USDC, 留空或 0 則開啟選單): " INPUT_AMT
+
+        # === 邏輯判斷：如果為空或為 0 ===
+        if [ -z "$INPUT_AMT" ] || [ "$INPUT_AMT" == "0" ]; then
+            echo "⚠️  未輸入金額，請選擇預設值："
+            echo "1) 1 USDC"
+            echo "2) 10 USDC"
+            echo "3) 100 USDC"
+            read -p "請選擇 (1-3): " AMT_CHOICE
+
+            case $AMT_CHOICE in
+                1) INPUT_AMT=1 ;;
+                2) INPUT_AMT=10 ;;
+                3) INPUT_AMT=100 ;;
+                *) 
+                    echo "無效選擇，預設使用 1 USDC"
+                    INPUT_AMT=1 
+                    ;;
+            esac
+        fi
+
+        # === 轉換為 MIST (USDC 9 位小數) ===
+        # 字串拼接 9 個 0 (假設輸入是整數)
+        AMOUNT_MIST="${INPUT_AMT}000000000"
         
-        echo -e "${GREEN}正在將 USDC 切分並存入...${NC}"
-        # 這裡簡化：假設傳入的 Coin 金額剛好，或是合約會處理。
-        # 在 CLI 中，如果 Coin 金額大於 deposit，通常需要先 split，或者合約支援 split。
-        # 假設合約簽名是 deposit_usdc(market, coin, ctx)
+        echo -e "${GREEN}準備存入金額: ${INPUT_AMT} USDC ($AMOUNT_MIST MIST)...${NC}"
+
+        # === 步驟 A: 切分 Coin (Split Coin) ===
+        # 因為 deposit 會吃掉整顆 Coin，所以要先切出指定金額
+        echo "正在切分 Coin..."
+        
+        SPLIT_RES=$(sui client split-coin \
+            --coin-id $COIN_ID \
+            --amounts $AMOUNT_MIST \
+            --gas-budget 50000000 \
+            --json 2> /dev/null)
+
+        # 檢查切分是否成功
+        if [[ $(echo "$SPLIT_RES" | jq -r '.effects.status.status') != "success" ]]; then
+            echo -e "${RED}❌ 切分失敗！可能是餘額不足或 Coin ID 錯誤。${NC}"
+            echo "$SPLIT_RES"
+            exit 1
+        fi
+
+        # 抓取新產生的 Coin ID (Created Object)
+        # 邏輯：尋找類型為 USDC 的 Created Object
+        NEW_COIN_ID=$(echo "$SPLIT_RES" | jq -r '.objectChanges[] | select(.type == "created" and (.objectType | contains("::usdc::USDC"))) | .objectId' | head -n 1)
+
+        if [ -z "$NEW_COIN_ID" ]; then
+            echo -e "${RED}❌ 無法取得新 Coin ID${NC}"
+            exit 1
+        fi
+        
+        echo "✅ 切分成功，新 Coin ID: $NEW_COIN_ID"
+
+        # === 步驟 B: 存入 Market (Deposit) ===
+        echo -e "${GREEN}正在存入 Market...${NC}"
         
         sui client call \
             --package $PACKAGE_ID \
             --module market \
             --function deposit_usdc \
-            --args $MARKET_ID $COIN_ID \
-            --gas-budget 50000000
+            --args $MARKET_ID $NEW_COIN_ID \
+            --gas-budget 50000000 2> /dev/null
+            
+        echo "✅ 存款交易已送出！"
         ;;
     3)
         # create_order(maker, maker_amount, taker_amount, maker_role, token_id, expiration, salt)

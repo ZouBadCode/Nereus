@@ -123,7 +123,6 @@ echo "✅ Market ID: $MARKET_ID"
 # 4. 處理 USDC (模擬)
 # 您的測試使用了 nereus::usdc。如果該模組有 init 函數產生 TreasuryCap，我們需要找到它來鑄造代幣。
 # 這裡假設發佈 Package 時產生了 TreasuryCap<USDC>
-USDC_TREASURY_ID=$(echo $PUBLISH_RES | jq -r '.objectChanges[] | select(.objectType | contains("::usdc::USDC") and (.objectType | contains("TreasuryCap"))) | .objectId')
 
 if [ -z "$USDC_TREASURY_ID" ]; then
     echo "⚠️ 找不到 USDC TreasuryCap，可能是因為它不是在 init 中創建的，或是 Shared Object。"
