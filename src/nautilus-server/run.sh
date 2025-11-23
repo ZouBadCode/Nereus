@@ -58,10 +58,10 @@ echo "$JSON_RESPONSE" | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /tmp/kvpair
 
 # == ATTENTION: code should be generated here that added all hosts to forward traffic ===
 # Traffic-forwarder-block
-python3 /traffic_forwarder.py 127.0.0.64 443 3 8101 &
-python3 /traffic_forwarder.py 127.0.0.65 443 3 8102 &
-python3 /traffic_forwarder.py 127.0.0.66 443 3 8103 &
-python3 /traffic_forwarder.py 127.0.0.67 443 3 8104 &
+python3 /traffic_forwarder.py 127.0.0.64 443 3 8000 &
+python3 /traffic_forwarder.py 127.0.0.65 443 3 8000 &
+python3 /traffic_forwarder.py 127.0.0.66 443 3 8000 &
+python3 /traffic_forwarder.py 127.0.0.67 443 3 8000 &
 
 
 
