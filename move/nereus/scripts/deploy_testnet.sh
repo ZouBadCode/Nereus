@@ -33,7 +33,7 @@ echo "當前地址: $ACTIVE_ADDR"
 
 # 設定 budget 1 SUI
 GAS_BUDGET=100000000
-echo "當前地址: $GAS_BUDGET"
+echo "Budget: $GAS_BUDGET"
 
 # 1. 發佈 Package
 echo -e "${GREEN}正在發佈 Package...${NC}"

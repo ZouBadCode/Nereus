@@ -27,8 +27,9 @@ echo -e "${BLUE}=== 開始部署 Nereus 到 Sui Testnet ===${NC}"
 ACTIVE_ADDR=$(sui client active-address)
 echo "當前地址: $ACTIVE_ADDR"
 
-# 設定 budget 1 SUI 
-GAS_BUDGET=1000000000
+# 設定 budget 1 SUI
+GAS_BUDGET=100000000
+echo "Budget: $GAS_BUDGET"
 
 # 讀取 .env (確保有 PACKAGE_ID)
 if [ -f .env ]; then
@@ -38,7 +39,9 @@ else
     exit 1
 fi
 
-echo "Package: $PACKAGE_ID"
+echo "✅ Package ID: $PACKAGE_ID"
+echo "✅ Treasury Manager ID: $USDC_TREASURY_ID"
+echo "✅ UPGRADE_CAP_ID: $UPGRADE_CAP_ID"
 
 # ==========================================
 # 2 合併創建 Config 與 Truth Oracle Holder (使用單一 PTB)
@@ -144,6 +147,7 @@ echo -e "${BLUE}=== 更新設定到 .env ===${NC}"
 # 這裡簡單起見，重新寫入關鍵變數
 cat <<EOT > .env
 PACKAGE_ID=$PACKAGE_ID
+UPGRADE_CAP_ID=$UPGRADE_CAP_ID
 CONFIG_ID=$CONFIG_ID
 ORACLE_ID=$ORACLE_ID
 MARKET_ID=$MARKET_ID
