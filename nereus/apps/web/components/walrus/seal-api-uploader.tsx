@@ -68,7 +68,7 @@ export function SealApiKeyUploader(props: SealApiKeyUploaderProps) {
     initialEntries = [{ name: '', value: '' }],
     onUploaded,
   } = props;
-
+  console.log(packageId, policyId);
   const [entries, setEntries] = useState<ApiKeyEntry[]>(
     initialEntries.map((e) => ({
       name: e.name ?? '',

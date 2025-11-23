@@ -512,7 +512,7 @@ function ResolutionTypePage({
 				signer={curacc || null}
 				sealClient={sealClient}
 				packageId={base}
-				policyId="0xYOUR_POLICY_ID_WITHOUT_PACKAGE_PREFIX"
+				policyId="0x3789869361a511e35a0c0bd6d579951991539a46638283fb53f9dcfbca9dd221"
 				threshold={2}
 				/>
 				
@@ -539,8 +539,8 @@ function ResolutionTypePage({
 				<SealApiKeyUploader
 					signer={curacc || null}
 					sealClient={sealClient}
-					packageId="0xYOUR_POLICY_PACKAGE"
-					policyId="0xYOUR_POLICY_ID_WITHOUT_PACKAGE_PREFIX"
+					packageId={base}
+					policyId="0x3789869361a511e35a0c0bd6d579951991539a46638283fb53f9dcfbca9dd221"
 					threshold={2}
 				/>
 				
