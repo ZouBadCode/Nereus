@@ -118,7 +118,7 @@ fun test_mint_and_merge_complete_set() {
         let usdc = ts::take_from_sender<Coin<USDC>>(&scenario);
         let ctx = ts::ctx(&mut scenario);
 
-        market::mint_complete_set(&mut market, usdc, ctx);
+        market::mint_complete_set(&mut market, usdc, 100_000_000_000, ctx);
 
         ts::return_shared(market);
     };
@@ -802,7 +802,7 @@ fun test_get_bids_asks_paged_test_2() {
         let ctx = ts::ctx(&mut scenario);
         debug::print(&usdc);
 
-        market::mint_complete_set(&mut market, usdc, ctx);
+        market::mint_complete_set(&mut market, usdc, 100_000_000_000, ctx);
 
         ts::return_shared(market);
     };
@@ -854,9 +854,9 @@ fun test_get_bids_asks_paged_test_2() {
         market::post_order(&mut market, o2, ctx);
         market::post_order(&mut market, o3, ctx);
 
-        let os1 = market::create_order(ALICE, 10, 100, SIDE_SELL, ASSET_NO, 0, 1);
-        let os2 = market::create_order(ALICE, 20, 100, SIDE_SELL, ASSET_NO, 0, 2);
-        let os3 = market::create_order(ALICE, 30, 100, SIDE_SELL, ASSET_NO, 0, 3);
+        let os1 = market::create_order(ALICE, 40, 100, SIDE_SELL, ASSET_NO, 0, 1);
+        let os2 = market::create_order(ALICE, 50, 100, SIDE_SELL, ASSET_NO, 0, 2);
+        let os3 = market::create_order(ALICE, 60, 100, SIDE_SELL, ASSET_NO, 0, 3);
 
         market::post_order(&mut market, os1, ctx);
         market::post_order(&mut market, os2, ctx);
@@ -889,7 +889,7 @@ fun test_get_bids_asks_paged_test_2() {
     {
         let market = ts::take_shared<Market>(&scenario);
 
-        // 第一頁：取 2 筆
+        // 第一頁：取 2 筆 bids
         let (bids_page1, cursor1) = market::get_bids(
             &market,
             std::option::some(ASSET_YES),
@@ -897,7 +897,7 @@ fun test_get_bids_asks_paged_test_2() {
             2,
         );
 
-        debug::print(&std::string::utf8(b"Page 1 count (Should be 2):"));
+        debug::print(&std::string::utf8(b"Bids Page 1 count (Should be 2/2):"));
         debug::print(&vector::length(&bids_page1));
         debug::print(&bids_page1);
         assert!(vector::length(&bids_page1) == 2, 101);
@@ -912,10 +912,23 @@ fun test_get_bids_asks_paged_test_2() {
             2,
         );
 
-        debug::print(&std::string::utf8(b"Page 2 count (Should be 1):"));
+        debug::print(&std::string::utf8(b"Bids Page 2 count (Should be 1/2):"));
         debug::print(&vector::length(&bids_page2));
         debug::print(&bids_page2);
         assert!(vector::length(&bids_page2) == 1, 103);
+
+        // 第一頁：取 2 筆 asks
+        let (asks_page1, _no_cursor) = market::get_asks(
+            &market,
+            std::option::some(ASSET_NO),
+            std::option::none(),
+            5,
+        );
+
+        debug::print(&std::string::utf8(b"Asks Page 1 count (Should be 3/5):"));
+        debug::print(&vector::length(&asks_page1));
+        debug::print(&asks_page1);
+        assert!(vector::length(&asks_page1) == 3, 104);
 
         ts::return_shared(market);
     };
