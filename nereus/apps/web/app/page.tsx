@@ -1,262 +1,177 @@
-// app/page.tsx
-import { ArrowUpRight, Brain, Code2, Shield, Sparkles, Waves } from "lucide-react";
+import React from 'react';
+import { 
+  ArrowUpRight, 
+  Brain, 
+  Code2, 
+  Shield, 
+  Sparkles, 
+  Waves, 
+  Activity, 
+  Search,
+  Anchor
+} from "lucide-react";
 
-import { Button } from "@workspace/ui/components/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@workspace/ui/components/card";
-import { Badge } from "@workspace/ui/components/badge";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@workspace/ui/components/accordion";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@workspace/ui/components/tabs";
-import Image from 'next/image';
-import Link from "next/link";
+// --- Mock UI Components for the single-file demo ---
+const Button = ({ className, variant, size, children, ...props }: any) => {
+  const base = "inline-flex items-center justify-center rounded-full font-medium transition-all focus:outline-none disabled:opacity-50";
+  const variants = {
+    default: "bg-amber-400 text-slate-950 hover:bg-amber-300",
+    outline: "border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-200",
+    ghost: "hover:bg-slate-800 text-slate-200",
+  };
+  const sizes = { sm: "h-9 px-4 text-xs", default: "h-11 px-8 text-sm", icon: "h-10 w-10" };
+  return <button className={`${base} ${variants[variant || 'default']} ${sizes[size || 'default']} ${className}`} {...props}>{children}</button>;
+};
+const Badge = ({ className, children }: any) => <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${className}`}>{children}</span>;
+// --------------------------------------------------
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50">
-      <HeroSection />
-      <FeatureStrip />
-      <HowItWorks />
-      <ResolutionModes />
-      <WhySection />
-      <FaqSection />
-      <FooterDots />
+    <main className="relative min-h-screen w-full overflow-x-hidden bg-slate-950 text-slate-200 selection:bg-amber-500/30 font-sans">
+      {/* --- Global Atmospheric Effects --- */}
+      
+      {/* 1. Grain/Noise Overlay */}
+      <div className="pointer-events-none fixed inset-0 z-50 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
+      
+      {/* 2. Deep Sea Glows (Fixed Background) */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-[-10%] left-[-10%] h-[800px] w-[800px] rounded-full bg-slate-900/40 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] h-[600px] w-[600px] rounded-full bg-amber-900/10 blur-[100px]" />
+        <div className="absolute top-[40%] left-[50%] h-[400px] w-[400px] -translate-x-1/2 rounded-full bg-sky-950/20 blur-[120px]" />
+      </div>
+
+      <div className="relative z-10">
+        <HeroSection />
+        <FeatureStrip />
+        <HowItWorks />
+        <ResolutionModes />
+        <WhySection />
+        <FooterDots />
+      </div>
     </main>
   );
 }
 
 function HeroSection() {
   return (
-    <section className="relative min-h-screen overflow-hidden">
-      <Image
-        src="/nereus_compress.gif"
-        alt="Nereus Hero Animation"
-        fill
-        className="object-cover opacity-65"
-        priority
-        unoptimized
-      />
+    <section className="relative min-h-screen w-full overflow-hidden">
+      {/* Background Image with heavy darkening */}
+      <div className="absolute inset-0 z-0">
+         <img
+          src="/nereus_compress.gif"
+          alt="Nereus Hero Animation"
+          className="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-luminosity grayscale-[30%]"
+        />
+        {/* Vignette & Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-slate-950" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#020617_100%)]" />
+      </div>
 
-      {/* Dark / gradient overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/95 via-sky-950/70 to-slate-950/95" />
-      {/* Golden temple glow */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(250,204,21,0.30),transparent_60%)] mix-blend-screen opacity-80" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_85%,rgba(250,204,21,0.20),transparent_65%)] mix-blend-screen opacity-80" />
-
-      {/* Content */}
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-6 pb-32 pt-6 md:px-10 md:pb-40">
-        {/* Top nav */}
-        <header className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-11 w-11 items-center justify-center rounded-3xl bg-slate-950/80 ring-2 ring-amber-400/70 shadow-[0_0_28px_rgba(250,204,21,0.55)]">
-              <Image
-                src="/nereus_logo.png"
-                alt="Nereus Logo"
-                width={32}
-                height={32}
-                className="rounded-2xl"
-              />
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col px-6 pt-6 md:px-10">
+        {/* Navigation */}
+        <header className="flex items-center justify-between py-6">
+          <div className="group flex items-center gap-4 cursor-pointer">
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 ring-1 ring-slate-800 transition-all duration-500 group-hover:ring-amber-500/50 group-hover:shadow-[0_0_20px_rgba(250,204,21,0.3)]">
+               {/* Logo Placeholder */}
+               <div className="h-5 w-5 rounded-sm bg-gradient-to-tr from-amber-600 to-amber-300" />
             </div>
-            <div className="flex flex-col leading-tight">
-              <span className="font-semibold tracking-tight text-amber-200 drop-shadow">
-                Nereus
-              </span>
-              <span className="text-xs text-sky-100/80">
-                Ocean-native Prediction Markets
-              </span>
+            <div className="flex flex-col">
+              <span className="font-serif text-lg tracking-widest text-slate-200 transition-colors group-hover:text-amber-100">NEREUS</span>
             </div>
           </div>
 
-          <nav className="hidden items-center gap-8 text-sm text-slate-200/80 md:flex">
-            <a href="#features" className="transition hover:text-amber-300">
-              Features
-            </a>
-            <a href="#how-it-works" className="transition hover:text-amber-300">
-              How it works
-            </a>
-            <a href="#resolution" className="transition hover:text-amber-300">
-              Resolution
-            </a>
-            <a href="#faq" className="transition hover:text-amber-300">
-              FAQ
-            </a>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-amber-400/60 bg-slate-950/60 text-amber-100 hover:bg-amber-500/10 hover:text-amber-200 shadow-[0_0_20px_rgba(250,204,21,0.35)]"
-            >
-              Docs
-            </Button>
-            <Button
-              size="sm"
-              className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-semibold shadow-[0_0_40px_rgba(250,204,21,0.7)] hover:from-amber-300 hover:via-yellow-200 hover:to-amber-400 ring-1 ring-amber-300/80"
-            >
-              <Link href="/main">
-                Launch App
-              </Link>
-              <ArrowUpRight className="ml-1.5 h-4 w-4" />
+          <nav className="hidden items-center gap-8 md:flex">
+            {['Features', 'Protocol', 'Resolution', 'FAQ'].map((item) => (
+              <a key={item} href={`#${item.toLowerCase()}`} className="text-xs font-medium uppercase tracking-widest text-slate-500 transition-colors hover:text-amber-400">
+                {item}
+              </a>
+            ))}
+            <Button size="sm" className="bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/20 backdrop-blur-md">
+              <a href="/main" className="text-white flex items-center gap-2">
+                Launch App <ArrowUpRight className="h-3 w-3" />
+              </a>
             </Button>
           </nav>
         </header>
 
-        {/* Hero main content */}
-        <div className="mt-10 flex flex-1 flex-col gap-10 md:flex-row md:items-center md:gap-12">
-          {/* Left: copy */}
-          <div className="max-w-xl space-y-6">
-            <Badge className="border border-amber-400/70 bg-slate-950/70 text-[11px] font-medium text-amber-100 shadow-[0_0_30px_rgba(250,204,21,0.6)] backdrop-blur">
-              <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(250,204,21,0.9)]" />
-              Live on-chain in seconds
-            </Badge>
-
-            <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-50 drop-shadow-[0_0_18px_rgba(15,23,42,1)] sm:text-5xl md:text-6xl">
-              Prediction Markets,
-              <span className="block bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(250,204,21,0.8)]">
-                Truly Decentralized.
+        {/* Main Hero Content */}
+        <div className="mt-20 flex flex-1 flex-col items-center justify-center text-center md:mt-0">
+          
+          <div className="animate-fade-in-up space-y-8">
+            <h1 className="max-w-4xl font-serif text-5xl text-slate-100 drop-shadow-2xl sm:text-7xl md:text-8xl">
+              <span className="block opacity-90">Predict the</span>
+              <span className="block bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-transparent opacity-90">
+                Unknowable
               </span>
             </h1>
 
-            <p className="max-w-lg text-sm text-slate-100/85 sm:text-base">
-              Nereus turns every opinion into liquid positions. Trade event
-              outcomes, earn yield while you bet, and let AI & code-native
-              oracles resolve markets without trusting a single operator.
+            <p className="mx-auto max-w-xl text-sm leading-relaxed text-slate-400 md:text-base">
+              Empower Your Visionary, Light Up the Pools of Possibility with the power of <p className='text-3xl italic text-white'>Nereus</p>
             </p>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <Button className="h-11 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 px-7 text-sm font-semibold text-slate-950 shadow-[0_0_45px_rgba(250,204,21,0.85)] hover:from-amber-300 hover:via-yellow-200 hover:to-amber-400 ring-1 ring-amber-300/80">
-                <Link href="/main">
-                  Launch App
-                </Link>
-                <ArrowUpRight className="ml-1.5 h-4 w-4" />
+            <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
+              <Button className="group h-12 min-w-[160px] rounded-sm bg-amber-500 px-8 text-slate-950 shadow-[0_0_40px_rgba(245,158,11,0.4)] transition-all hover:bg-amber-400 hover:shadow-[0_0_60px_rgba(245,158,11,0.6)]">
+                <span className="font-semibold tracking-wide">Enter App</span>
               </Button>
-              <Button
-                variant="outline"
-                className="h-11 rounded-full border-amber-400/60 bg-slate-950/80 px-6 text-sm text-amber-100 hover:bg-amber-500/10 hover:text-amber-200 shadow-[0_0_26px_rgba(250,204,21,0.45)]"
-              >
-                View protocol design
+              <Button variant="outline" className="h-12 min-w-[160px] rounded-sm border-slate-800 bg-slate-950/50 text-slate-400 backdrop-blur hover:border-amber-500/30 hover:text-amber-200">
+                Read the Whitepaper
               </Button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-6 text-xs text-slate-300/80">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500/20 shadow-[0_0_18px_rgba(250,204,21,0.7)]">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-200" />
-                </div>
-                <div>
-                  <div className="font-medium text-amber-100">
-                    Yield when you bet
-                  </div>
-                  <div className="text-slate-200/85">
-                    Idle liquidity earns fees & on-chain yield.
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500/20 shadow-[0_0_18px_rgba(250,204,21,0.7)]">
-                  <Shield className="h-3.5 w-3.5 text-amber-200" />
-                </div>
-                <div>
-                  <div className="font-medium text-amber-100">
-                    Collateral always on-chain
-                  </div>
-                  <div className="text-slate-200/85">
-                    No custodial pools. Fully auditable.
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
-
-          {/* Right side可以之後放海底神殿 mockup / stats */}
+        </div>
+        
+        {/* Scroll Indicator */}
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 opacity-50">
+           <div className="h-12 w-[1px] bg-gradient-to-b from-slate-700 to-transparent" />
         </div>
       </div>
     </section>
   );
 }
 
-function StatPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-950/80 p-3 ring-1 ring-amber-500/60 shadow-[0_0_24px_rgba(250,204,21,0.4)]">
-      <div className="text-[11px] text-amber-100/80">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-amber-200">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function ProgressBar({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-[11px] text-amber-100/80">
-        <span>{label}</span>
-        <span>{value}%</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800/80">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-emerald-300 shadow-[0_0_20px_rgba(250,204,21,0.8)]"
-          style={{ width: `${value}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function FeatureStrip() {
   const features = [
     {
-      title: "Generate yield when you bet",
-      description:
-        "LP shares earn trading fees and external yield sources while your positions stay live.",
+      title: "User oriented Pools",
+      description: "By providing instructions and liquidity, user gain governance of the world of Nereus.",
       icon: Sparkles,
     },
     {
-      title: "AI resolution",
-      description:
-        "LLM-based agents read data, transcripts and oracles, then output verifiable resolution proofs.",
+      title: "Infinite Topics",
+      description: "Anything that can be determined can be a potential market.",
       icon: Brain,
     },
     {
-      title: "Code resolution",
-      description:
-        "Fully deterministic markets that resolve directly from on-chain state and contracts.",
+      title: "Immutable Resolution",
+      description: "Via Nautilus, the Market resolves in Trustable, Immutable Code and Large Language Model.",
       icon: Code2,
     },
   ];
 
   return (
-    <section
-      id="features"
-      className="bg-slate-950 pt-16 pb-20 md:pt-24 md:pb-24"
-    >
-      <div className="mx-auto max-w-5xl px-6 md:px-10">
-        <div className="grid gap-6 md:grid-cols-3">
-          {features.map((f) => (
-            <Card
+    <section id="features" className="relative py-32">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="grid gap-8 md:grid-cols-3">
+          {features.map((f, i) => (
+            <div
               key={f.title}
-              className="group relative flex flex-col rounded-[26px] border border-amber-500/40 bg-[radial-gradient(circle_at_10%_0%,rgba(250,204,21,0.24),transparent_55%),radial-gradient(circle_at_90%_100%,rgba(14,165,233,0.24),transparent_55%),linear-gradient(to_bottom,#020617,#020617)] shadow-[0_18px_60px_rgba(0,0,0,0.95)] backdrop-blur-xl transition hover:-translate-y-2 hover:border-amber-300/70"
+              className="group relative overflow-hidden rounded-sm border border-slate-800 bg-slate-900/20 p-8 backdrop-blur-sm transition-all duration-700 hover:bg-slate-900/40"
             >
-              <div className="pointer-events-none absolute inset-px rounded-[24px] bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.12),transparent_60%)] opacity-0 transition group-hover:opacity-100" />
-              <CardHeader className="relative space-y-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/70 shadow-[0_0_22px_rgba(250,204,21,0.7)]">
-                  <f.icon className="h-4.5 w-4.5" />
+              {/* Hover Glow Effect */}
+              <div className="absolute -inset-1 rounded-sm bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 opacity-0 blur-xl transition-opacity duration-700 group-hover:opacity-100" />
+              
+              <div className="relative z-10 flex flex-col items-start gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 border border-slate-800 text-slate-400 shadow-2xl transition-colors group-hover:border-amber-500/40 group-hover:text-amber-400">
+                  <f.icon className="h-5 w-5" />
                 </div>
-                <CardTitle className="text-base text-amber-50">
-                  {f.title}
-                </CardTitle>
-                <CardDescription className="text-xs text-amber-100/85">
-                  {f.description}
-                </CardDescription>
-              </CardHeader>
-            </Card>
+                <div>
+                  <h3 className="mb-2 font-serif text-xl text-slate-200 group-hover:text-amber-100">{f.title}</h3>
+                  <p className="text-sm leading-relaxed text-slate-500 group-hover:text-slate-400">
+                    {f.description}
+                  </p>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -266,62 +181,37 @@ function FeatureStrip() {
 
 function HowItWorks() {
   const steps = [
-    {
-      title: "Create a market",
-      body: "Define the question, outcomes and resolution criteria. Choose between AI, code, or hybrid resolution.",
-    },
-    {
-      title: "Provide liquidity or trade",
-      body: "LPs seed the pool and earn fees. Traders buy YES/NO shares at LMSR-driven prices.",
-    },
-    {
-      title: "Resolve and settle",
-      body: "Resolution engines submit proofs on-chain. Payouts are instantly distributed from the pool.",
-    },
+    { title: "Initialization", body: "Define the question. Choose the oracle. Summon the pool." },
+    { title: "Positions", body: "Traders buy outcomes. LPs seed depth. The curve adapts." },
+    { title: "Settlement", body: "Reality is verified. Truth is pushed on-chain. Value settles." },
   ];
 
   return (
-    <section
-      id="how-it-works"
-      className="border-t border-slate-900 bg-gradient-to-b from-slate-950 to-slate-950/95 py-16 md:py-20"
-    >
-      <div className="mx-auto max-w-5xl px-6 md:px-10">
-        <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-md space-y-3">
-            <Badge className="bg-amber-500/20 text-xs text-amber-200 border border-amber-400/60">
-              How Nereus works
-            </Badge>
-            <h2 className="text-2xl font-semibold tracking-tight md:text-3xl text-amber-50">
-              A three-phase flow,
-              <span className="block text-amber-300">
-                built for deep liquidity.
-              </span>
-            </h2>
-            <p className="text-sm text-slate-100/85">
-              Every market is an isolated ocean pool: configurable curves,
-              collateral, and resolution. The protocol never takes custody of
-              user funds outside the contracts that back your positions.
-            </p>
-          </div>
+    <section className="relative border-y border-slate-900/50 bg-slate-950/50 py-32">
+      <div className="mx-auto max-w-5xl px-6">
+        <div className="mb-16 md:text-center">
+          <h2 className="font-serif text-3xl text-slate-200 md:text-4xl">
+            Protocol <span className="text-amber-500">Mechanics</span>
+          </h2>
+        </div>
 
-          <div className="grid gap-4 md:w-[52%]">
-            {steps.map((s, idx) => (
-              <div
-                key={s.title}
-                className="relative flex gap-4 rounded-2xl border border-amber-500/40 bg-slate-950/85 p-4 backdrop-blur-xl shadow-[0_18px_40px_rgba(0,0,0,0.8)]"
-              >
-                <div className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-yellow-300 text-xs font-semibold text-slate-950 shadow-[0_0_22px_rgba(250,204,21,0.8)] ring-1 ring-amber-300/80">
-                  {idx + 1}
-                </div>
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold text-amber-50">
-                    {s.title}
-                  </div>
-                  <p className="text-xs text-amber-100/85">{s.body}</p>
-                </div>
+        <div className="relative grid gap-12 md:grid-cols-3">
+          {/* Connecting Line (Desktop) */}
+          <div className="absolute left-0 top-1/2 hidden h-[1px] w-full -translate-y-1/2 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent md:block" />
+
+          {steps.map((s, idx) => (
+            <div key={idx} className="relative flex flex-col items-center text-center">
+              {/* Number Node */}
+              <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-slate-800 bg-slate-950 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 transition-transform duration-500 hover:scale-110 hover:border-amber-500/50">
+                <span className="font-serif text-xl text-slate-400">{idx + 1}</span>
+                {/* Ping animation */}
+                <div className="absolute inset-0 -z-10 animate-ping rounded-full bg-amber-500/10 opacity-20" style={{ animationDelay: `${idx * 0.5}s` }} />
               </div>
-            ))}
-          </div>
+
+              <h3 className="mb-2 text-lg font-medium text-slate-200">{s.title}</h3>
+              <p className="text-sm text-slate-500">{s.body}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -330,111 +220,55 @@ function HowItWorks() {
 
 function ResolutionModes() {
   return (
-    <section
-      id="resolution"
-      className="border-t border-slate-900 bg-slate-950 py-16 md:py-20"
-    >
-      <div className="mx-auto max-w-5xl px-6 md:px-10">
-        <div className="flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <Badge className="bg-emerald-500/15 text-xs text-emerald-200 border border-emerald-400/60">
-              Resolution layer
-            </Badge>
-            <h2 className="text-2xl font-semibold tracking-tight md:text-3xl text-amber-50">
-              AI, code or human committees.
-              <span className="block text-amber-300">
-                Pick the right oracle for each ocean.
-              </span>
-            </h2>
-            <p className="max-w-md text-sm text-slate-100/85">
-              Nereus lets creators mix resolution engines: deterministic
-              on-chain checks, AI-assisted judgments and multisig councils. Each
-              engine ships with explicit on-chain SLAs and escape hatches.
-            </p>
-          </div>
-
-          <Tabs defaultValue="ai" className="mt-3 w-full max-w-md md:mt-0">
-            <TabsList className="grid w-full grid-cols-3 bg-slate-950/80 border border-amber-500/40 rounded-2xl shadow-[0_0_30px_rgba(250,204,21,0.45)]">
-              <TabsTrigger
-                value="ai"
-                className="text-xs data-[state=active]:text-amber-200 data-[state=active]:bg-slate-900/80 data-[state=active]:shadow-[0_0_20px_rgba(250,204,21,0.6)]"
-              >
-                AI
-              </TabsTrigger>
-              <TabsTrigger
-                value="code"
-                className="text-xs data-[state=active]:text-amber-200 data-[state=active]:bg-slate-900/80 data-[state=active]:shadow-[0_0_20px_rgba(250,204,21,0.6)]"
-              >
-                Code
-              </TabsTrigger>
-              <TabsTrigger
-                value="hybrid"
-                className="text-xs data-[state=active]:text-amber-200 data-[state=active]:bg-slate-900/80 data-[state=active]:shadow-[0_0_20px_rgba(250,204,21,0.6)]"
-              >
-                Hybrid
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="ai" className="mt-4">
-              <Card className="border border-amber-500/45 bg-slate-950/85 shadow-[0_20px_40px_rgba(0,0,0,0.9)]">
-                <CardHeader className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-100 ring-1 ring-amber-400/60 shadow-[0_0_22px_rgba(250,204,21,0.75)]">
-                      <Brain className="h-4 w-4" />
-                    </div>
-                    <CardTitle className="text-sm text-amber-50">
-                      AI Resolution Agents
-                    </CardTitle>
+    <section className="relative py-32">
+      {/* We use flex-row-reverse to keep the card on the left and the text on the right (order 2) on large screens */}
+      <div className="mx-auto flex max-w-6xl flex-col gap-16 px-6 md:flex-row md:items-center">
+        
+        {/* Card Block - Left Aligned on Desktop */}
+        <div className="md:w-1/2">
+           {/* Abstract "Hologram" Card */}
+           <div className="relative rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
+              <div className="absolute -inset-px bg-gradient-to-b from-emerald-500/20 to-transparent opacity-20 blur-lg" />
+              
+              <div className="relative grid gap-4 overflow-hidden rounded-xl bg-slate-950 p-6">
+                  {/* Mode 1 */}
+                  <div className="flex items-start gap-4 rounded-lg border border-slate-800/50 bg-slate-900/20 p-4 transition-colors hover:border-amber-500/30 hover:bg-slate-900/40">
+                     <div className="mt-1 text-amber-500">
+                        <Brain className="h-5 w-5" />
+                     </div>
+                     <div>
+                        <h4 className="text-sm font-medium text-slate-200">AI Agents</h4>
+                        <p className="text-xs text-slate-500 mt-1">LLMs parse news & APIs to resolve markets instantly.</p>
+                     </div>
                   </div>
-                  <CardDescription className="text-xs text-amber-100/85">
-                    LLMs read structured data, transcripts and market criteria
-                    to output resolution proofs. Every step is logged and
-                    auditable.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </TabsContent>
 
-            <TabsContent value="code" className="mt-4">
-              <Card className="border border-emerald-500/45 bg-slate-950/85 shadow-[0_20px_40px_rgba(0,0,0,0.9)]">
-                <CardHeader className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-400/60 shadow-[0_0_22px_rgba(16,185,129,0.75)]">
-                      <Code2 className="h-4 w-4" />
-                    </div>
-                    <CardTitle className="text-sm text-emerald-50">
-                      Code-native Resolution
-                    </CardTitle>
+                  {/* Mode 2 */}
+                  <div className="flex items-start gap-4 rounded-lg border border-slate-800/50 bg-slate-900/20 p-4 transition-colors hover:border-emerald-500/30 hover:bg-slate-900/40">
+                     <div className="mt-1 text-emerald-500">
+                        <Code2 className="h-5 w-5" />
+                     </div>
+                     <div>
+                        <h4 className="text-sm font-medium text-slate-200">On-Chain Code</h4>
+                        <p className="text-xs text-slate-500 mt-1">Smart contracts resolve based on price feeds & events.</p>
+                     </div>
                   </div>
-                  <CardDescription className="text-xs text-emerald-100/85">
-                    Markets that resolve purely from chain state: prices,
-                    oracle feeds and contract calls. Zero interpretation, fully
-                    reproducible.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </TabsContent>
+              </div>
+           </div>
+        </div>
 
-            <TabsContent value="hybrid" className="mt-4">
-              <Card className="border border-indigo-400/55 bg-slate-950/85 shadow-[0_20px_40px_rgba(0,0,0,0.9)]">
-                <CardHeader className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-indigo-500/25 text-indigo-100 ring-1 ring-indigo-400/70 shadow-[0_0_22px_rgba(129,140,248,0.75)]">
-                      <Shield className="h-4 w-4" />
-                    </div>
-                    <CardTitle className="text-sm text-indigo-50">
-                      Hybrid & Committees
-                    </CardTitle>
-                  </div>
-                  <CardDescription className="text-xs text-indigo-100/85">
-                    AI suggests a resolution, code validates the inputs, and a
-                    human committee signs off only when needed. Defense in
-                    depth for high-stakes markets.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </TabsContent>
-          </Tabs>
+        {/* Text Block - Right Aligned on Desktop */}
+        <div className="md:w-1/2 space-y-6 md:text-right">
+          {/* Badge: Use `md:ml-auto` to push the badge to the right in the text-right container */}
+          <h2 className="font-serif text-4xl text-slate-100">
+            Trust is <br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-emerald-600">
+              Deterministic
+            </span>
+          </h2>
+          {/* Paragraph: Use `md:ml-auto` to push a fixed-width paragraph to the right in the text-right container */}
+          <p className="max-w-md text-slate-400 leading-relaxed md:ml-auto">
+            Nereus allows creators to mix resolution engines. AI agents read unstructured data. Code checks on-chain state. Humans intervene only as a failsafe.
+          </p>
         </div>
       </div>
     </section>
@@ -443,45 +277,41 @@ function ResolutionModes() {
 
 function WhySection() {
   return (
-    <section className="border-t border-slate-900 bg-gradient-to-b from-slate-950 via-sky-950/40 to-slate-950 py-16 md:py-20">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 md:flex-row md:px-10">
-        <div className="max-w-md space-y-3">
-          <Badge className="bg-amber-500/20 text-xs text-amber-200 border border-amber-400/60">
-            Built like an ocean temple
-          </Badge>
-          <h2 className="text-2xl font-semibold tracking-tight md:text-3xl text-amber-50">
-            Liquidity that feels like a deep sea,
-            <span className="block text-amber-300">
-              not a shallow prediction pool.
-            </span>
+    <section className="relative border-t border-slate-900 bg-slate-950 py-32">
+      {/* Background Accent */}
+      <div className="absolute right-0 top-0 h-[500px] w-[500px] bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.03),transparent_70%)] pointer-events-none" />
+
+      <div className="mx-auto flex max-w-6xl flex-col gap-12 px-6 lg:flex-row">
+        <div className="lg:w-1/3 space-y-6">
+          <h2 className="font-serif text-3xl text-slate-100">
+            Depth where it <br />
+            <span className="italic text-amber-500">matters.</span>
           </h2>
-          <p className="text-sm text-slate-100/85">
-            Orderbooks fragment liquidity across pairs. Nereus uses curve-based
-            pools and cross-market collateral to concentrate depth where it
-            matters: around the current belief.
+          <p className="text-sm text-slate-400">
+            Orderbooks fragment liquidity. Nereus uses concentrated pools and cross-market collateral to create deep oceans of liquidity around the current consensus.
           </p>
         </div>
 
-        <div className="grid flex-1 gap-4 md:grid-cols-2">
+        <div className="grid flex-1 gap-6 sm:grid-cols-2 lg:w-2/3">
           <MiniMetric
             icon={Waves}
-            label="Continuous prices"
-            value="LMSR-style curves with bounded loss for LPs."
+            label="Continuous Liquidity"
+            value="LMSR curves ensure there is always a price for your position."
           />
           <MiniMetric
             icon={Sparkles}
-            label="Composable collateral"
-            value="Bring your yield-bearing assets as backing collateral."
+            label="Yield Bearing"
+            value="Collateral is never idle. Earn external yield while you bet."
           />
           <MiniMetric
             icon={Activity}
-            label="Latency-tolerant"
-            value="Designed for oracle delays & chain finality."
+            label="Latency Tolerant"
+            value="Architected for L2 finality and delayed oracle reporting."
           />
           <MiniMetric
             icon={Shield}
-            label="Guardrails"
-            value="Circuit breakers & dispute windows on every market."
+            label="Circuit Breakers"
+            value="Automated pause states during high volatility events."
           />
         </div>
       </div>
@@ -489,6 +319,7 @@ function WhySection() {
   );
 }
 
+// --- The Requested Component (Updated for darker theme) ---
 function MiniMetric({
   icon: Icon,
   label,
@@ -499,93 +330,44 @@ function MiniMetric({
   value: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-2xl border border-amber-500/40 bg-[radial-gradient(circle_at_0%_0%,rgba(250,204,21,0.18),transparent_55%),linear-gradient(to_bottom,#020617,#020617)] p-4 text-xs backdrop-blur shadow-[0_18px_40px_rgba(0,0,0,0.9)]">
-      <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-amber-500/20 text-amber-200 shadow-[0_0_18px_rgba(250,204,21,0.7)]">
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-      <div>
-        <div className="font-semibold text-amber-50">{label}</div>
-        <p className="mt-1 text-amber-100/85">{value}</p>
+    <div className="group relative w-full rounded-2xl sm:w-auto">
+      {/* 1. The Initial Border (TL to BR) - Fades OUT on hover */}
+      {/* Changed colors to be more subtle/mysterious (amber-900/amber-600) */}
+      <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-amber-600/30 via-transparent to-amber-600/30 transition-opacity duration-500 group-hover:opacity-0" />
+
+      {/* 2. The Hover Border (TR to BL) - Fades IN on hover */}
+      {/* Brighter amber on hover */}
+      <div className="absolute -inset-px rounded-2xl bg-gradient-to-bl from-amber-400/50 via-transparent to-amber-400/50 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+
+      {/* 3. The Main Content */}
+      <div className="relative h-full flex flex-col gap-4 rounded-2xl bg-slate-950 p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+        {/* Subtle inner noise/texture */}
+        <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
+        
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-amber-500/80 shadow-inner ring-1 ring-slate-800 group-hover:text-amber-400 group-hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all">
+          <Icon className="h-5 w-5" />
+        </div>
+        
+        <div className="relative">
+          <div className="font-serif text-lg text-slate-200 group-hover:text-amber-50 transition-colors">{label}</div>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500 group-hover:text-slate-400 transition-colors">{value}</p>
+        </div>
       </div>
     </div>
   );
 }
 
-function FaqSection() {
-  return (
-    <section
-      id="faq"
-      className="border-t border-slate-900 bg-slate-950 pb-16 pt-14"
-    >
-      <div className="mx-auto max-w-3xl px-6 md:px-10">
-        <div className="mb-6 space-y-2 text-center">
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-50">
-            FAQ
-          </h2>
-          <p className="text-xs text-slate-300/85">
-            A quick overview of how Nereus behaves under the surface.
-          </p>
-        </div>
-
-        <Accordion type="single" collapsible className="space-y-2">
-          <AccordionItem value="1" className="border-slate-800">
-            <AccordionTrigger className="text-sm">
-              Is Nereus non-custodial?
-            </AccordionTrigger>
-            <AccordionContent className="text-xs text-slate-300/90">
-              Yes. All collateral lives in smart contracts that back open
-              positions and liquidity shares. There is no off-chain custody
-              layer that can pause withdrawals or move funds without on-chain
-              approval.
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="2" className="border-slate-800">
-            <AccordionTrigger className="text-sm">
-              What assets can I use as collateral?
-            </AccordionTrigger>
-            <AccordionContent className="text-xs text-slate-300/90">
-              The protocol is designed to support stablecoins and yield-bearing
-              tokens as collateral. Each deployment whitelists assets that have
-              sufficient liquidity, oracle coverage and risk parameters.
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="3" className="border-slate-800">
-            <AccordionTrigger className="text-sm">
-              How are AI resolutions kept in check?
-            </AccordionTrigger>
-            <AccordionContent className="text-xs text-slate-300/90">
-              AI agents run inside deterministic pipelines with full logs.
-              Markets define escalation paths: if the AI output is contested,
-              a committee or on-chain vote can override it within a fixed
-              dispute window.
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
-    </section>
-  );
-}
-
 function FooterDots() {
   return (
-    <footer className="border-t border-slate-900 bg-slate-950 py-6">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 md:px-10">
-        <span className="text-xs text-slate-500">
-          © {new Date().getFullYear()} Nereus. All rights reserved.
+    <footer className="bg-slate-950 py-12">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 opacity-30 transition-opacity hover:opacity-100">
+        <span className="font-serif text-xs tracking-widest text-slate-500">
+          NEREUS PROTOCOL © {new Date().getFullYear()}
         </span>
-        <div className="flex items-center gap-3">
-          <span className="sr-only">Pagination dots</span>
-          <span className="h-4 w-4 rounded-full bg-amber-500/60 shadow-[0_0_18px_rgba(250,204,21,0.8)]"></span>
-          <span className="h-4 w-4 rounded-full bg-amber-400/40 shadow-[0_0_14px_rgba(250,204,21,0.7)]"></span>
-          <span className="h-4 w-4 rounded-full bg-sky-500/40 shadow-[0_0_14px_rgba(56,189,248,0.7)]"></span>
+        <div className="flex items-center gap-4">
+          <Anchor className="h-4 w-4 text-slate-600" />
         </div>
       </div>
     </footer>
   );
-}
-
-function Activity(props: React.SVGProps<SVGSVGElement>) {
-  return <Shield {...props} />; // placeholder if you don't import Activity from lucide-react
 }
