@@ -5,3 +5,4 @@ endpoints:
   - "proxy.internal"
   - "aggregator.testnet.walrus.atalma.io"
   - "publisher.walrus-01.tududes.com"
+  - "127.0.0.1"

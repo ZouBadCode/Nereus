@@ -165,18 +165,37 @@ __run().catch(e => {{
     );
 
     let temp_path = write_temp_js(&wrapper)?;
-    let child = Command::new("node")
-        .arg(&temp_path)
+
+    // 這裡開始：讀取你想用的 proxy URL（例如 http://proxy.internal:8080）
+    let proxy = std::env::var("CODE_HTTP_PROXY").ok();
+
+    let mut cmd = Command::new("node");
+    cmd.arg(&temp_path)
         .arg(serde_json::to_string(payload)?)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+
+    // 把 proxy 設成 Node 的環境變數，給 axios / fetch / 其他 HTTP client 用
+    if let Some(p) = proxy {
+        cmd.env("HTTP_PROXY", &p)
+            .env("HTTPS_PROXY", &p)
+            // 有些 lib 會看這兩個：
+            .env("http_proxy", &p)
+            .env("https_proxy", &p);
+    }
+
+    let child = cmd.spawn()?;
 
     let output = child.wait_with_output().await?;
     if !output.status.success() {
-        anyhow::bail!("node error: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "node error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-    let v = serde_json::from_str::<Value>(String::from_utf8_lossy(&output.stdout).trim())?;
+    let v = serde_json::from_str::<Value>(
+        String::from_utf8_lossy(&output.stdout).trim(),
+    )?;
     Ok(v)
 }
 
@@ -199,7 +218,7 @@ async fn execute_with_python(code: &str, payload: &Value) -> anyhow::Result<Valu
     let escaped_user_code = code.replace("'''", r"\'\'\'");
     let wrapper = format!(
         r#"
-import json, sys, contextlib, io
+import json, sys, contextlib, io, os
 
 USER_CODE = '''{user_code}'''
 
@@ -223,19 +242,34 @@ print(json.dumps(result))
         user_code = escaped_user_code
     );
 
-    let child = Command::new("python")
-        .arg("-u")
+    let proxy = std::env::var("CODE_HTTP_PROXY").ok();
+
+    let mut cmd = Command::new("python");
+    cmd.arg("-u")
         .arg("-c")
         .arg(wrapper)
         .arg(serde_json::to_string(payload)?)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+
+    if let Some(p) = proxy {
+        cmd.env("HTTP_PROXY", &p)
+            .env("HTTPS_PROXY", &p)
+            .env("http_proxy", &p)
+            .env("https_proxy", &p);
+    }
+
+    let child = cmd.spawn()?;
 
     let output = child.wait_with_output().await?;
     if !output.status.success() {
-        anyhow::bail!("python error: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "python error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-    let v = serde_json::from_str::<Value>(String::from_utf8_lossy(&output.stdout).trim())?;
+    let v = serde_json::from_str::<Value>(
+        String::from_utf8_lossy(&output.stdout).trim(),
+    )?;
     Ok(v)
 }

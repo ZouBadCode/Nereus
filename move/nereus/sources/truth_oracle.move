@@ -3,10 +3,11 @@ module nereus::truth_oracle;
 use std::string::{Self, String};
 use enclave::enclave::{Self, Enclave, EnclaveConfig, Cap};
 use walrus::blob::Blob;
+use sui::hash::blake2b256;
 
 const TRUTH_INTENT: u8 = 0;
 const EInvalidSignature: u64 = 1;
-
+const ENoAccess: u64 = 2;
 public struct OracleConfig has key, store {
     id: UID,
     blob_id: String,
@@ -109,4 +110,18 @@ public fun create_wblob(
         blob,
     };
     wblob
+}
+
+entry fun seal_approve(_id: vector<u8>, enclave: &Enclave<TRUTH_ORACLE>, ctx: &TxContext) {
+    // In this example whether the enclave is the latest version is not checked. One
+    // can pass EnclaveConfig as an argument and check config_version if needed.
+    assert!(ctx.sender().to_bytes() == pk_to_address(enclave.pk()), ENoAccess);
+}
+
+fun pk_to_address(pk: &vector<u8>): vector<u8> {
+        // Assume ed25519 flag for enclave's ephemeral key. Derive address as blake2b_hash(flag || pk).
+    let mut arr = vector[0u8];
+    arr.append(*pk);
+    let hash = blake2b256(&arr);
+    hash
 }

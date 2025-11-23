@@ -92,6 +92,7 @@ COPY --from=user-linux-nitro /bzImage /
 COPY --from=user-linux-nitro /nsm.ko /
 COPY --from=user-linux-nitro /linux.config /
 
+ENV CODE_HTTP_PROXY=http://127.0.0.1:8080
 # =========================================================
 # 3) build Rust binary & nautilus-server
 # =========================================================

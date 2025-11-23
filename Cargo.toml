@@ -4,7 +4,7 @@ members = [
   "src/init",
   "src/system",
   "src/host-proxy"
-]
+, "src/nautilus_host_proxy"]
 
 exclude = [
   "src/nautilus-server"
