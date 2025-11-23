@@ -43,10 +43,10 @@ public(package) fun mint_usdc(
 }
 
 public fun faucet(
-    ctx: &mut TxContext,
     treasury_cap_manager: &mut TreasuryCapManager,
+    ctx: &mut TxContext,
 ) {
     let treasury_cap = borrow_treasury_cap(treasury_cap_manager);
-    transfer::public_transfer(mint_usdc(treasury_cap, 1_000_000_000, ctx), ctx.sender());
+    transfer::public_transfer(mint_usdc(treasury_cap, 100_000_000_000, ctx), ctx.sender());
 
 }
