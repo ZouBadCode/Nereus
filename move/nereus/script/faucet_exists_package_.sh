@@ -90,8 +90,8 @@ else
         # ==========================================
         # 只有當執行次數 > 1 才需要檢查合併
         if [ "$MINT_TIMES" -gt 1 ]; then
-            echo -e "${BLUE}等待鏈上狀態更新 (3秒)...${NC}"
-            sleep 3 # 稍微等待，確保 indexer 抓得到新 Coin
+            echo -e "${BLUE}等待鏈上狀態更新 (15秒)...${NC}"
+            sleep 15 # 稍微等待，確保 indexer 抓得到新 Coin
 
             echo -e "${BLUE}正在檢查並合併 USDC Coins...${NC}"
 
