@@ -73,7 +73,7 @@ function HeroSection() {
           <div className="group flex items-center gap-4 cursor-pointer">
             <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 ring-1 ring-slate-800 transition-all duration-500 group-hover:ring-amber-500/50 group-hover:shadow-[0_0_20px_rgba(250,204,21,0.3)]">
                {/* Logo Placeholder */}
-               <div className="h-5 w-5 rounded-sm bg-gradient-to-tr from-amber-600 to-amber-300" />
+               <img src="./nereus_logo.png" alt="Nereus Logo" className="h-full w-full" />
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-lg tracking-widest text-slate-200 transition-colors group-hover:text-amber-100">NEREUS</span>
@@ -111,7 +111,7 @@ function HeroSection() {
 
             <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
               <Button className="group h-12 min-w-[160px] rounded-sm bg-amber-500 px-8 text-slate-950 shadow-[0_0_40px_rgba(245,158,11,0.4)] transition-all hover:bg-amber-400 hover:shadow-[0_0_60px_rgba(245,158,11,0.6)]">
-                <span className="font-semibold tracking-wide">Enter App</span>
+                <span className="font-semibold tracking-wide"><a href="/main">Enter App</a></span>
               </Button>
               <Button variant="outline" className="h-12 min-w-[160px] rounded-sm border-slate-800 bg-slate-950/50 text-slate-400 backdrop-blur hover:border-amber-500/30 hover:text-amber-200">
                 Read the Whitepaper

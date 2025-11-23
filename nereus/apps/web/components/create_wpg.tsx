@@ -6,6 +6,18 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { Badge } from "@workspace/ui/components/badge";
+import { Separator } from "@workspace/ui/components/separator";
+import { 
+    CalendarIcon, 
+    Tag, 
+    Layers, 
+    FileText, 
+    Code, 
+    Bot, 
+    ImageIcon,
+    CheckCircle2
+} from "lucide-react";
 import { WalrusCodeUploader } from "./walrus/walrus-code-uploader";
 import { WalrusPromptUploader } from "./walrus/walrus-prompt-uploader";
 import type { WalrusUploadResult } from "@/store/move/walrus/walrusRelay";
@@ -554,76 +566,144 @@ function ResolutionTypePage({
 
 // Review Page
 function ReviewPage({ form }: { form: FormState }) {
-	return (
-		<div className="space-y-6">
-			<div className="space-y-2">
-				<h3 className="text-xl font-semibold">Review Your Market</h3>
-				<p className="text-muted-foreground">Please review all details before creating your market</p>
-			</div>
-			
-			<div className="space-y-4 text-sm">
-				{form.selectedTemplate && (
-					<div>
-						<span className="font-semibold">Template:</span> {form.selectedTemplate.title}
-					</div>
-				)}
-				<div>
-					<span className="font-semibold">Market Name:</span> {form.name || "—"}
-				</div>
-				<div>
-					<span className="font-semibold">Rules:</span> {form.rules || "—"}
-				</div>
-				{form.marketRules && (
-					<div>
-						<span className="font-semibold">Market Rules:</span> {form.marketRules}
-					</div>
-				)}
-				<div>
-					<span className="font-semibold">Category:</span> {form.category || "—"}
-				</div>
-				<div>
-					<span className="font-semibold">Tags:</span> {form.tags || "—"}
-				</div>
-				{form.imageUrl && (
-					<div>
-						<span className="font-semibold">Image URL:</span> {form.imageUrl}
-					</div>
-				)}
-				<div>
-					<span className="font-semibold">End Date:</span> {form.endDate || "—"} {form.endTime && `at ${form.endTime}`}
-				</div>
-				<div>
-					<span className="font-semibold">Resolution Type:</span> {form.resolutionType === "ai" ? "AI Resolution" : form.resolutionType === "code" ? "Code Resolution" : "—"}
-				</div>
-				{form.resolutionType === "ai" && form.aiPromptUploadResult && (
-					<>
-						<div>
-							<span className="font-semibold">AI Prompt Blob ID:</span> {form.aiPromptUploadResult.blobId}
-						</div>
-						<div>
-							<span className="font-semibold">AI Prompt Content:</span>
-							<div className="mt-1 p-2 bg-muted rounded text-xs max-h-20 overflow-y-auto whitespace-pre-wrap">
-								{form.userEnteredPrompt || form.aiPrompt}
-							</div>
-						</div>
-					</>
-				)}
-				{form.resolutionType === "code" && form.codeUploadResult && (
-					<>
-						<div>
-							<span className="font-semibold">Code Blob ID:</span> {form.codeUploadResult.blobId}
-						</div>
-						<div>
-							<span className="font-semibold">Code Content:</span>
-							<div className="mt-1 p-2 bg-muted rounded text-xs max-h-20 overflow-y-auto whitespace-pre-wrap font-mono">
-								{form.userEnteredCode}
-							</div>
-						</div>
-					</>
-				)}
-			</div>
-		</div>
-	);
+    // 格式化日期顯示
+    const formattedEndDate = new Date(form.endDate).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+
+    return (
+        <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Header Section: 標題與基礎資訊 */}
+            <div className="flex flex-col md:flex-row gap-6 items-start">
+                {/* 圖片預覽 (如果有的話) */}
+                <div className="shrink-0 w-full md:w-32 h-32 bg-muted rounded-lg flex items-center justify-center overflow-hidden border">
+                    {form.imageUrl ? (
+                        <img src={form.imageUrl} alt="Market Cover" className="w-full h-full object-cover" />
+                    ) : (
+                        <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
+                    )}
+                </div>
+
+                <div className="space-y-3 flex-1">
+                    <div>
+                        <h3 className="text-2xl font-bold tracking-tight">{form.name || "Untitled Market"}</h3>
+                        <p className="text-muted-foreground flex items-center gap-2 mt-1">
+                            <Layers className="w-4 h-4" />
+                            {form.category || "Uncategorized"}
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        {form.tags.split(',').map((tag) => tag.trim()).filter(t => t).map((tag) => (
+                            <span key={tag} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                                <Tag className="w-3 h-3 mr-1" />
+                                {tag}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <Separator className="my-6" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Left Column: 市場規則與時間 */}
+                <div className="space-y-6">
+                    <div>
+                        <h4 className="text-sm font-semibold uppercase text-muted-foreground mb-3 flex items-center gap-2">
+                            <FileText className="w-4 h-4" /> Market Details
+                        </h4>
+                        <div className="bg-accent/30 rounded-lg p-4 space-y-4 border">
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground">Short Rules</label>
+                                <p className="font-medium text-sm">{form.rules || "—"}</p>
+                            </div>
+                            
+                            {form.rules !== form.marketRules && (
+                                <div>
+                                    <label className="text-xs font-medium text-muted-foreground">Detailed Rules</label>
+                                    <p className="text-sm text-foreground/90 whitespace-pre-wrap mt-1">
+                                        {form.marketRules || "Same as short rules"}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="text-sm font-semibold uppercase text-muted-foreground mb-3 flex items-center gap-2">
+                            <CalendarIcon className="w-4 h-4" /> Timeline
+                        </h4>
+                        <div className="flex items-center gap-4 bg-accent/30 p-4 rounded-lg border">
+                            <div className="flex-1">
+                                <label className="text-xs font-medium text-muted-foreground">Resolution Date</label>
+                                <div className="font-semibold">{formattedEndDate}</div>
+                            </div>
+                            <div className="h-8 w-[1px] bg-border"></div>
+                            <div className="flex-1 text-right">
+                                <label className="text-xs font-medium text-muted-foreground">Time</label>
+                                <div className="font-semibold">{form.endTime || "23:59"}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Column: 技術解析與 Walrus 數據 */}
+                <div className="space-y-6">
+                    <h4 className="text-sm font-semibold uppercase text-muted-foreground mb-3 flex items-center gap-2">
+                        {form.resolutionType === 'ai' ? <Bot className="w-4 h-4" /> : <Code className="w-4 h-4" />}
+                        Resolution Mechanism
+                    </h4>
+
+                    <div className="border rounded-xl overflow-hidden shadow-sm">
+                        <div className="bg-muted px-4 py-3 border-b flex justify-between items-center">
+                            <span className="font-semibold text-sm flex items-center gap-2">
+                                {form.resolutionType === "ai" ? "AI Resolution" : "Code Resolution"}
+                            </span>
+                            {(form.aiPromptUploadResult || form.codeUploadResult) && (
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> Uploaded to Walrus
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="p-4 space-y-4 bg-card">
+                            {/* Blob ID Section */}
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground">Walrus Blob ID</label>
+                                <div className="font-mono text-xs bg-muted p-2 rounded border mt-1 truncate">
+                                    {form.resolutionType === "ai" 
+                                        ? form.aiPromptUploadResult?.blobId || "Pending..."
+                                        : form.codeUploadResult?.blobId || "Pending..."
+                                    }
+                                </div>
+                            </div>
+
+                            {/* Content Preview Section */}
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground">
+                                    {form.resolutionType === "ai" ? "Prompt Content" : "Source Code"}
+                                </label>
+                                <div className="mt-1 relative">
+                                    <div className="absolute top-0 left-0 w-full h-full pointer-events-none rounded border shadow-inner inset-0"></div>
+                                    <div className="max-h-[200px] overflow-y-auto p-3 text-xs font-mono bg-zinc-950 text-zinc-100 rounded">
+                                        <pre className="whitespace-pre-wrap break-all">
+                                            {form.resolutionType === "ai" 
+                                                ? (form.userEnteredPrompt || form.aiPrompt) 
+                                                : form.userEnteredCode}
+                                        </pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 function Stepper({ step }: { step: Step }) {

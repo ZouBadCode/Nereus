@@ -8,74 +8,104 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* * Default Theme: The Void (Abyss Mode)
+   * 極致深邃版。背景接近黑色 (#001219)，
+   * 所有的元素都經過「消光」處理，只有 Neon Cyan 的文字和按鈕會發光。
+   */
+  --background: #001219; /* Void Black/Teal - 極致深黑 */
+  --foreground: #98cacf; /* 保持淺青色文字，提供閱讀光線 */
+  
+  --card: #01202e; /* Deepest Navy - 卡片幾乎融入背景 */
+  --card-foreground: #e0f7fa;
+  
+  --popover: #001219;
+  --popover-foreground: #e0f7fa;
+  
+  /* Primary 保持高亮，製造深海生物發光的效果 */
+  --primary: #48cae4; 
+  --primary-foreground: #001219; /* 文字改為深黑，對比最強 */
+  
+  --secondary: #0a3f55; /* Deep Teal - 次要按鈕 */
+  --secondary-foreground: #e0f7fa;
+  
+  --muted: #001824; /* 比背景稍亮一點點，用於區塊 */
+  --muted-foreground: #468faf;
+  
+  --accent: #0a3f55;
+  --accent-foreground: #48cae4;
+  
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(1 0 0);
+  
+  /* 邊框調暗，不再發亮，而是像幽暗的結構線 */
+  --border: #113645; 
+  --input: #113645;
+  --ring: #48cae4;
+  
+  --chart-1: #48cae4;
+  --chart-2: #00b4d8;
+  --chart-3: #90e0ef;
+  --chart-4: #0077b6;
+  --chart-5: #023e8a;
+  
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  
+  --sidebar: #001219;
+  --sidebar-foreground: #98cacf;
+  --sidebar-primary: #48cae4;
+  --sidebar-primary-foreground: #001219;
+  --sidebar-accent: #01202e;
+  --sidebar-accent-foreground: #e0f7fa;
+  --sidebar-border: #113645;
+  --sidebar-ring: #48cae4;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+.light {
+  /* * Alternative Theme: Light Mode (High Contrast)
+   * 亮色模式保持不變，作為強烈對比的選項。
+   */
+  --background: oklch(1 0 0);
+  --foreground: #013040;
+
+  --card: oklch(1 0 0);
+  --card-foreground: #013040;
+  
+  --popover: oklch(1 0 0);
+  --popover-foreground: #013040;
+  
+  --primary: #013040;
+  --primary-foreground: #48cae4;
+  
+  --secondary: #e0f2f5;
+  --secondary-foreground: #013040;
+  
+  --muted: #f0f9fa;
+  --muted-foreground: #044d66;
+  
+  --accent: #f0f9fa;
+  --accent-foreground: #023e64;
+  
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(1 0 0);
+  
+  --border: #2d8bba; 
+  --input: #2d8bba;
+  --ring: #023e64;
+  
+  --chart-1: #013040;
+  --chart-2: #023e64;
+  --chart-3: #2d8bba;
+  --chart-4: #044d66;
+  --chart-5: #98cacf;
+  
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: #013040;
+  --sidebar-primary: #013040;
+  --sidebar-primary-foreground: #48cae4;
+  --sidebar-accent: #f0f9fa;
+  --sidebar-accent-foreground: #013040;
+  --sidebar-border: #2d8bba;
+  --sidebar-ring: #023e64;
 }
 
 @theme inline {

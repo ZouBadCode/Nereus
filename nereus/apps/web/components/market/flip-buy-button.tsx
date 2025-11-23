@@ -30,12 +30,15 @@ export const FlipBuyButton = ({
   const isFlipped = selectedSide === side;
 
   // 樣式設定：根據 YES/NO 決定顏色
-  const isYes = side === "YES";
-  const baseColor = isYes ? "bg-emerald-600" : "bg-rose-600";
-  const hoverColor = isYes ? "hover:bg-emerald-500" : "hover:bg-rose-500";
+const isYes = side === "YES";
+
+  const baseColor = isYes ? "bg-teal-600" : "bg-rose-700";
+  
+  const hoverColor = isYes ? "hover:bg-teal-500" : "hover:bg-rose-600";
+
   const gradient = isYes 
-    ? "from-emerald-500 to-teal-600 shadow-emerald-500/20" 
-    : "from-rose-500 to-red-600 shadow-rose-500/20";
+    ? "from-teal-600 to-cyan-700 shadow-teal-900/20" 
+    : "from-rose-700 to-red-900 shadow-rose-900/20";
 
   // 自動聚焦邏輯
   useEffect(() => {

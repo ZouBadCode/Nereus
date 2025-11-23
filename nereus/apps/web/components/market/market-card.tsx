@@ -93,7 +93,7 @@ export function MarketCard({ m, onMarketClick }: MarketCardProps) {
             {m.topic}
           </CardTitle>
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-2 break-words mt-1">
+        <p className="text-sm text-gray-400 line-clamp-2 break-words mt-1">
           {m.description}
         </p>
       </CardHeader>
