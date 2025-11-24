@@ -44,7 +44,7 @@ export const storeStore = create<StoreState>((set) => ({
   user: { USDC: [], YesPositions: [], NoPositions: [] },
 
   queryMarkets: async () => {
-    const res = await gqlQuery(`
+    const res = await gqlQuery<any>(`
       {
         objects(filter: { type: "${market}::Market" }) {
           nodes {
@@ -122,7 +122,7 @@ export const storeStore = create<StoreState>((set) => ({
   },
 
   fetchUser: async (userAddress: string) => {
-    const res = await gqlQuery(`
+    const res = await gqlQuery<any>(`
       {
   address(address: "${userAddress}") {
     balance(coinType: "${base}::usdc::USDC") {
@@ -154,7 +154,7 @@ export const storeStore = create<StoreState>((set) => ({
   },
   fetchRichMan: async (marketAddress: string, side: "Yes" | "No") => {
     // 1. 抓取物件與擁有者資訊
-    const res = await gqlQuery(`
+    const res = await gqlQuery<any>(`
       {
         objects(
           filter: {
@@ -188,7 +188,7 @@ export const storeStore = create<StoreState>((set) => ({
 
     // 3. 抓取時間戳記 (Timestamp)
     const digests = rawNodes.map((item: any) => `"${item.previousTransaction.digest}"`).join(",");
-    const res2 = await gqlQuery(`
+    const res2 = await gqlQuery<any>(`
       {
         multiGetTransactionEffects(keys:[${digests}]) {
           timestamp

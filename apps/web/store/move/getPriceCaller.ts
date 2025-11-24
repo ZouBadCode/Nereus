@@ -26,7 +26,7 @@ export async function getPrices(marketObjectId: string) {
   if (result.results && result.results.length > 0) {
     const firstResult = result.results[0];
 
-    if (firstResult.returnValues) {
+    if (firstResult?.returnValues) {
       const parsedValues = firstResult.returnValues.map((item, index) => {
         const rawBytes = item[0] as number[]; // e.g. [0, 101, 205, 29, 0, 0, 0, 0]
         const typeType = item[1];             // e.g. "u64"

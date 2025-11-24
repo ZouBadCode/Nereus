@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@workspace/ui"],
-  experimental: {
-    serverExternalPackages: ["@mysten/walrus", "@mysten/walrus-wasm"],
+  serverExternalPackages: ["@mysten/walrus", "@mysten/walrus-wasm"],
+  webpack: (config) => {
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+    return config;
   },
 }
 

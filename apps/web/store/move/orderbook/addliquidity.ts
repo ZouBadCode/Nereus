@@ -1,7 +1,8 @@
+import { Transaction } from "@mysten/sui/transactions";
 import { market } from "../package";
 
 // 不再負責 Merge，只負責執行 Move Call
-export function provideLPtx(tx, fundingCoin: any, marketId: string, amount: bigint) {
+export function provideLPtx(tx: Transaction, fundingCoin: any, marketId: string, amount: bigint) {
     tx.moveCall({
         target: `${market}::mint_complete_set`,
         arguments: [

@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { storeStore } from "@/store/storeStore";
 import { PricePill } from "../../components/market/price-pill";
@@ -25,7 +25,7 @@ function calculatePercentage(value: number, total: number): number {
 
 const formatDate = (ts: number) => new Date(ts).toLocaleString();
 
-export default function MarketPage() {
+function MarketContent() {
 	const client = useSuiClient();
 	const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction({
 		execute: async ({ bytes, signature }) =>
@@ -330,5 +330,13 @@ export default function MarketPage() {
 				</div>)}
 			</div>
 		</div>
+	);
+}
+
+export default function MarketPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<MarketContent />
+		</Suspense>
 	);
 }

@@ -24,7 +24,7 @@ export function buyNoTx(
     if (usdcCoins.length === 0) throw new Error("No USDC coins provided");
 
     // 1. Handle Coin
-    const primaryCoin = tx.object(usdcCoins[0]);
+    const primaryCoin = tx.object(usdcCoins[0]!);
     if (usdcCoins.length > 1) {
         tx.mergeCoins(primaryCoin, usdcCoins.slice(1).map(id => tx.object(id)));
     }
