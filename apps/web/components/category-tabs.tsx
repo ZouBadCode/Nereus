@@ -7,13 +7,16 @@ import { storeStore } from "@/store/storeStore";
 export function CategoryTabs({ children }: { children: (active: string) => React.ReactNode }) {
   const [active, setActive] = useState("All")
   const marketList = storeStore((state) => state.marketList);
-  const CATEGORIES = useMemo(() => {
+  const CATEGORIES = useMemo<string[]>(() => {
     // Define static items
     const all = "All";
     const ended = "Ended";
 
     if (!marketList || marketList.length === 0) return [all, ended];
-    const uniqueCats = [...new Set(marketList.map((m) => m.category).filter(Boolean))];
+    const uniqueCats = Array.from(new Set(
+      // filter(Boolean) can be typed as string[] so the Set contains strings
+      marketList.map((m) => m.category).filter(Boolean) as string[]
+    ));
     
     return [all, ...uniqueCats, ended];
   }, [marketList]); 

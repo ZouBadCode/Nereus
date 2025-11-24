@@ -1,26 +1,39 @@
 import React from 'react';
-import { 
-  ArrowUpRight, 
-  Brain, 
-  Code2, 
-  Shield, 
-  Sparkles, 
-  Waves, 
-  Activity, 
+import {
+  ArrowUpRight,
+  Brain,
+  Code2,
+  Shield,
+  Sparkles,
+  Waves,
+  Activity,
   Search,
   Anchor
 } from "lucide-react";
 
 // --- Mock UI Components for the single-file demo ---
-const Button = ({ className, variant, size, children, ...props }: any) => {
+type ButtonVariant = 'default' | 'outline' | 'ghost';
+type ButtonSize = 'sm' | 'default' | 'icon';
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  className?: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  children?: React.ReactNode;
+}
+
+const Button = ({ className = '', variant = 'default', size = 'default', children, ...props }: ButtonProps) => {
   const base = "inline-flex items-center justify-center rounded-full font-medium transition-all focus:outline-none disabled:opacity-50";
-  const variants = {
+  const variants: Record<ButtonVariant, string> = {
     default: "bg-amber-400 text-slate-950 hover:bg-amber-300",
     outline: "border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-200",
     ghost: "hover:bg-slate-800 text-slate-200",
   };
-  const sizes = { sm: "h-9 px-4 text-xs", default: "h-11 px-8 text-sm", icon: "h-10 w-10" };
-  return <button className={`${base} ${variants[variant || 'default']} ${sizes[size || 'default']} ${className}`} {...props}>{children}</button>;
+  const sizes: Record<ButtonSize, string> = {
+    sm: "h-9 px-4 text-xs",
+    default: "h-11 px-8 text-sm",
+    icon: "h-10 w-10",
+  };
+  return <button className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>{children}</button>;
 };
 const Badge = ({ className, children }: any) => <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${className}`}>{children}</span>;
 // --------------------------------------------------
@@ -29,10 +42,10 @@ export default function LandingPage() {
   return (
     <main className="relative min-h-screen w-full overflow-x-hidden bg-slate-950 text-slate-200 selection:bg-amber-500/30 font-sans">
       {/* --- Global Atmospheric Effects --- */}
-      
+
       {/* 1. Grain/Noise Overlay */}
       <div className="pointer-events-none fixed inset-0 z-50 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-      
+
       {/* 2. Deep Sea Glows (Fixed Background) */}
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute top-[-10%] left-[-10%] h-[800px] w-[800px] rounded-full bg-slate-900/40 blur-[120px]" />
@@ -57,7 +70,7 @@ function HeroSection() {
     <section className="relative min-h-screen w-full overflow-hidden">
       {/* Background Image with heavy darkening */}
       <div className="absolute inset-0 z-0">
-         <img
+        <img
           src="/nereus_compress.gif"
           alt="Nereus Hero Animation"
           className="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-luminosity grayscale-[30%]"
@@ -72,8 +85,8 @@ function HeroSection() {
         <header className="flex items-center justify-between py-6">
           <div className="group flex items-center gap-4 cursor-pointer">
             <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 ring-1 ring-slate-800 transition-all duration-500 group-hover:ring-amber-500/50 group-hover:shadow-[0_0_20px_rgba(250,204,21,0.3)]">
-               {/* Logo Placeholder */}
-               <img src="./nereus_logo.png" alt="Nereus Logo" className="h-full w-full" />
+              {/* Logo Placeholder */}
+              <img src="./nereus_logo.png" alt="Nereus Logo" className="h-full w-full" />
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-lg tracking-widest text-slate-200 transition-colors group-hover:text-amber-100">NEREUS</span>
@@ -96,7 +109,7 @@ function HeroSection() {
 
         {/* Main Hero Content */}
         <div className="mt-20 flex flex-1 flex-col items-center justify-center text-center md:mt-0">
-          
+
           <div className="animate-fade-in-up space-y-8">
             <h1 className="max-w-4xl font-serif text-5xl text-slate-100 drop-shadow-2xl sm:text-7xl md:text-8xl">
               <span className="block opacity-90">Predict the</span>
@@ -106,8 +119,9 @@ function HeroSection() {
             </h1>
 
             <p className="mx-auto max-w-xl text-sm leading-relaxed text-slate-400 md:text-base">
-              Empower Your Visionary, Light Up the Pools of Possibility with the power of <p className='text-3xl italic text-white'>Nereus</p>
+              Empower Your Visionary, Light Up the Pools of Possibility with the power of 
             </p>
+            <p className='text-3xl italic text-white'>Nereus</p>
 
             <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
               <Button className="group h-12 min-w-[160px] rounded-sm bg-amber-500 px-8 text-slate-950 shadow-[0_0_40px_rgba(245,158,11,0.4)] transition-all hover:bg-amber-400 hover:shadow-[0_0_60px_rgba(245,158,11,0.6)]">
@@ -119,10 +133,10 @@ function HeroSection() {
             </div>
           </div>
         </div>
-        
+
         {/* Scroll Indicator */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 opacity-50">
-           <div className="h-12 w-[1px] bg-gradient-to-b from-slate-700 to-transparent" />
+          <div className="h-12 w-[1px] bg-gradient-to-b from-slate-700 to-transparent" />
         </div>
       </div>
     </section>
@@ -159,7 +173,7 @@ function FeatureStrip() {
             >
               {/* Hover Glow Effect */}
               <div className="absolute -inset-1 rounded-sm bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 opacity-0 blur-xl transition-opacity duration-700 group-hover:opacity-100" />
-              
+
               <div className="relative z-10 flex flex-col items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 border border-slate-800 text-slate-400 shadow-2xl transition-colors group-hover:border-amber-500/40 group-hover:text-amber-400">
                   <f.icon className="h-5 w-5" />
@@ -223,44 +237,44 @@ function ResolutionModes() {
     <section className="relative py-32">
       {/* We use flex-row-reverse to keep the card on the left and the text on the right (order 2) on large screens */}
       <div className="mx-auto flex max-w-6xl flex-col gap-16 px-6 md:flex-row md:items-center">
-        
+
         {/* Card Block - Left Aligned on Desktop */}
         <div className="md:w-1/2">
-           {/* Abstract "Hologram" Card */}
-           <div className="relative rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
-              <div className="absolute -inset-px bg-gradient-to-b from-emerald-500/20 to-transparent opacity-20 blur-lg" />
-              
-              <div className="relative grid gap-4 overflow-hidden rounded-xl bg-slate-950 p-6">
-                  {/* Mode 1 */}
-                  <div className="flex items-start gap-4 rounded-lg border border-slate-800/50 bg-slate-900/20 p-4 transition-colors hover:border-amber-500/30 hover:bg-slate-900/40">
-                     <div className="mt-1 text-amber-500">
-                        <Brain className="h-5 w-5" />
-                     </div>
-                     <div>
-                        <h4 className="text-sm font-medium text-slate-200">AI Agents</h4>
-                        <p className="text-xs text-slate-500 mt-1">LLMs parse news & APIs to resolve markets instantly.</p>
-                     </div>
-                  </div>
+          {/* Abstract "Hologram" Card */}
+          <div className="relative rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
+            <div className="absolute -inset-px bg-gradient-to-b from-emerald-500/20 to-transparent opacity-20 blur-lg" />
 
-                  {/* Mode 2 */}
-                  <div className="flex items-start gap-4 rounded-lg border border-slate-800/50 bg-slate-900/20 p-4 transition-colors hover:border-emerald-500/30 hover:bg-slate-900/40">
-                     <div className="mt-1 text-emerald-500">
-                        <Code2 className="h-5 w-5" />
-                     </div>
-                     <div>
-                        <h4 className="text-sm font-medium text-slate-200">On-Chain Code</h4>
-                        <p className="text-xs text-slate-500 mt-1">Smart contracts resolve based on price feeds & events.</p>
-                     </div>
-                  </div>
+            <div className="relative grid gap-4 overflow-hidden rounded-xl bg-slate-950 p-6">
+              {/* Mode 1 */}
+              <div className="flex items-start gap-4 rounded-lg border border-slate-800/50 bg-slate-900/20 p-4 transition-colors hover:border-amber-500/30 hover:bg-slate-900/40">
+                <div className="mt-1 text-amber-500">
+                  <Brain className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-slate-200">AI Agents</h4>
+                  <p className="text-xs text-slate-500 mt-1">LLMs parse news & APIs to resolve markets instantly.</p>
+                </div>
               </div>
-           </div>
+
+              {/* Mode 2 */}
+              <div className="flex items-start gap-4 rounded-lg border border-slate-800/50 bg-slate-900/20 p-4 transition-colors hover:border-emerald-500/30 hover:bg-slate-900/40">
+                <div className="mt-1 text-emerald-500">
+                  <Code2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-slate-200">On-Chain Code</h4>
+                  <p className="text-xs text-slate-500 mt-1">Smart contracts resolve based on price feeds & events.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Text Block - Right Aligned on Desktop */}
         <div className="md:w-1/2 space-y-6 md:text-right">
           {/* Badge: Use `md:ml-auto` to push the badge to the right in the text-right container */}
           <h2 className="font-serif text-4xl text-slate-100">
-            Trust is <br/>
+            Trust is <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-emerald-600">
               Deterministic
             </span>
@@ -343,11 +357,11 @@ function MiniMetric({
       <div className="relative h-full flex flex-col gap-4 rounded-2xl bg-slate-950 p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
         {/* Subtle inner noise/texture */}
         <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
-        
+
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-amber-500/80 shadow-inner ring-1 ring-slate-800 group-hover:text-amber-400 group-hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all">
           <Icon className="h-5 w-5" />
         </div>
-        
+
         <div className="relative">
           <div className="font-serif text-lg text-slate-200 group-hover:text-amber-50 transition-colors">{label}</div>
           <p className="mt-2 text-xs leading-relaxed text-slate-500 group-hover:text-slate-400 transition-colors">{value}</p>

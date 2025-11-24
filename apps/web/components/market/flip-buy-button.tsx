@@ -11,6 +11,7 @@ interface FlipBuyButtonProps {
   setAmount?: (val: string) => void;
   selectedSide?: 'YES' | 'NO' | null;
   setSelectedSide?: (side: 'YES' | 'NO' | null) => void;
+  disabled?: boolean;
 }
 
 export const FlipBuyButton = ({ 
