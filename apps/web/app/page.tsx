@@ -74,7 +74,7 @@ function HeroSection() {
         <img
           src="/nereus_compress.gif"
           alt="Nereus Hero Animation"
-          className="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-luminosity grayscale-[30%]"
+          className="absolute inset-0 h-full w-full object-cover opacity-70 mix-blend-luminosity grayscale-[30%]"
         />
         {/* Vignette & Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-slate-950" />
@@ -101,7 +101,7 @@ function HeroSection() {
               </a>
             ))}
             <Button size="sm" className="bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/20 backdrop-blur-md">
-              <Link href="/main" target="_blank" rel="noopener noreferrer">
+              <Link href="/main" target="_blank" rel="noopener noreferrer" className='text-white flex items-center gap-2'>
                 Launch App <ArrowUpRight className="h-3 w-3" />
               </Link>
             </Button>
